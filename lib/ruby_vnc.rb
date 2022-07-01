@@ -1,6 +1,6 @@
-require "ruby_vnc/version"
+# frozen_string_literal: true
+require 'ruby_vnc/version'
 
 module RubyVnc
-  class Error < StandardError; end
-  # Your code goes here...
+  autoload :Client, './lib/ruby_vnc/client.rb'
 end
