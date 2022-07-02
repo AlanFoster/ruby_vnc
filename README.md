@@ -22,7 +22,42 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Create either a real VNC server, or a fake server with:
+
+```
+# Create a password configuration file
+vncpasswd ./password.txt
+
+# Kill any existing servers
+vncserver -kill :1
+
+# Create a new server
+vncserver :1 -rfbport 5900 -rfbauth ./password.txt
+```
+
+Ensure it can be connected to:
+```
+$ vncviewer -passwd password.txt 172.16.83.2
+Connected to RFB server, using protocol version 3.8
+Enabling TightVNC protocol extensions
+Performing standard VNC authentication
+Authentication successful
+Desktop name "Foo's X desktop (foo:1)"
+VNC server default format:
+  32 bits per pixel.
+  Least significant byte first in each pixel.
+  True colour: max red 255 green 255 blue 255, shift red 16 green 8 blue 0
+Using default colormap which is TrueColor.  Pixel format:
+  32 bits per pixel.
+  Least significant byte first in each pixel.
+  True colour: max red 255 green 255 blue 255, shift red 16 green 8 blue 0
+Same machine: preferring raw encoding
+```
+
+Connect via the Ruby client:
+```
+ruby ./examples/example.rb --host 172.16.83.2
+```
 
 ## Development
 

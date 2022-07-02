@@ -1,5 +1,6 @@
-require "bundler/setup"
-require "ruby_vnc"
+require 'bundler/setup'
+require 'ruby_vnc'
+require_relative './lib/mock_socket'
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

@@ -40,5 +40,9 @@ client = RubyVnc::Client.new(
   port: options[:port],
   logger: options[:verbose] ? Logger.new(STDOUT) : Logger.new(nil)
 )
-connection = client.login(password: options[:password])
+client.negotiate
+connection = client.authenticate(
+  security_type: RubyVnc::Client::SecurityType::VNC_AUTHENTICATION,
+  password: options[:password]
+)
 puts connection
