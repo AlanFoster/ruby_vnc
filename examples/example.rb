@@ -6,7 +6,8 @@ require 'optparse'
 
 options = {
   port: 5900,
-  verbose: true
+  verbose: true,
+  password: nil
 }
 options_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} [options]"
@@ -21,6 +22,10 @@ options_parser = OptionParser.new do |opts|
 
   opts.on('--port=PORT', 'The target port') do |port|
     options[:port] = port
+  end
+
+  opts.on('--password=PASSWORD', 'The target host') do |password|
+    options[:password] = password
   end
 
   opts.on('--verbose', 'Enable verbose logging') do |verbose|
