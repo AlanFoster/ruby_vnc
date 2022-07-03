@@ -102,6 +102,22 @@ class RubyVnc::Client
     uint32 :status
   end
 
+  # Sent from the server to the client on authentication failure
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.2.2
+  class VncAuthenticationFailureReason < BinData::Record
+    endian :big
+
+    # the reason_string length
+    # @!attribute [r] reason_length
+    #   @return [Integer]
+    uint32 :reason_length
+
+    # The reason failure string
+    # @!attribute [r] reason_string
+    #   @return [String]
+    string :reason_string, read_length: -> { reason_length }
+  end
+
   def initialize(
     host: nil,
     port: 5900,
@@ -180,11 +196,20 @@ class RubyVnc::Client
     socket.write(response.to_binary_s)
 
     authentication_result = VncAuthenticationResult.read(socket)
-    if authentication_result.status == SecurityResult::OK
+
+    # Handle the authentication status code
+    case authentication_result.status
+    when SecurityResult::OK
       logger.info('successfully authenticated')
       true
+    when SecurityResult::FAILED
+      failure_reason = VncAuthenticationFailureReason.read(socket)
+      logger.info("failed authentication - #{failure_reason}")
+
+      false
     else
-      logger.info('did not successfully authenticate')
+      logger.info("unknown status code #{authentication_result.status} did not successfully authenticate")
+
       false
     end
   end

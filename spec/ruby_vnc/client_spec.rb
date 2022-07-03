@@ -71,28 +71,60 @@ RSpec.describe RubyVnc::Client do
     end
 
     context 'when authenticating with VNC_AUTHENTICATION' do
-      let(:socket) do
-        data = (
-          # Security challenge
-          "\xa5\xec\x33\x6f\x4f\xa2\x5b\x75\x74\x56\xdb\x54\x97\x68\xfe\x7e" +
-          # Authentication success result
-          "\x00\x00\x00\x00"
-        ).b
+      context 'and the authentication is successful' do
+        let(:socket) do
+          data = (
+            # Security challenge
+            "\xa5\xec\x33\x6f\x4f\xa2\x5b\x75\x74\x56\xdb\x54\x97\x68\xfe\x7e" +
+            # Authentication success result
+            "\x00\x00\x00\x00"
+          ).b
 
-        RubyVnc::SynchronousReaderWriter.new(MockSocket.new(data))
+          RubyVnc::SynchronousReaderWriter.new(MockSocket.new(data))
+        end
+
+        before(:each) do
+          handshake = RubyVnc::Client::SecurityHandshake.new(
+            number_of_security_types: 1,
+            security_types: [RubyVnc::Client::SecurityType::VNC_AUTHENTICATION]
+          )
+          allow(subject).to receive(:handshake).and_return(handshake)
+        end
+
+        it 'authenticates successfully when the password is smaller than 8 bytes' do
+          result = subject.authenticate(password: 'password123', security_type: RubyVnc::Client::SecurityType::VNC_AUTHENTICATION)
+          expect(result).to eq true
+        end
       end
 
-      before(:each) do
-        handshake = RubyVnc::Client::SecurityHandshake.new(
-          number_of_security_types: 1,
-          security_types: [RubyVnc::Client::SecurityType::VNC_AUTHENTICATION]
-        )
-        allow(subject).to receive(:handshake).and_return(handshake)
-      end
+      context 'and the authentication fails' do
+        let(:socket) do
+          data = (
+            # Security challenge
+            "\xa5\xec\x33\x6f\x4f\xa2\x5b\x75\x74\x56\xdb\x54\x97\x68\xfe\x7e" +
+              # Authentication failure result
+              "\x00\x00\x00\x01" +
+              # Authentication failure string length
+              "\x00\x00\x00\x15" +
+              # Authentication failure string
+              "\x41\x75\x74\x68\x65\x6e\x74\x69\x63\x61\x74\x69\x6f\x6e\x20\x66\x61\x69\x6c\x65\x64"
+          ).b
 
-      it 'authenticates successfully when the password is smaller than 8 bytes' do
-        result = subject.authenticate(password: 'password123', security_type: RubyVnc::Client::SecurityType::VNC_AUTHENTICATION)
-        expect(result).to eq true
+          RubyVnc::SynchronousReaderWriter.new(MockSocket.new(data))
+        end
+
+        before(:each) do
+          handshake = RubyVnc::Client::SecurityHandshake.new(
+            number_of_security_types: 1,
+            security_types: [RubyVnc::Client::SecurityType::VNC_AUTHENTICATION]
+          )
+          allow(subject).to receive(:handshake).and_return(handshake)
+        end
+
+        it 'authenticates successfully when the password is smaller than 8 bytes' do
+          result = subject.authenticate(password: 'password123', security_type: RubyVnc::Client::SecurityType::VNC_AUTHENTICATION)
+          expect(result).to eq false
+        end
       end
     end
   end
