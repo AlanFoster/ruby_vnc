@@ -8,4 +8,5 @@ gem 'rspec', '~> 3.0'
 
 group :development do
   gem 'pry-byebug'
+  gem 'benchmark-ips'
 end

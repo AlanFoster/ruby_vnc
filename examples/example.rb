@@ -46,8 +46,14 @@ client = RubyVnc::Client.new(
   logger: options[:verbose] ? Logger.new(STDOUT) : Logger.new(nil)
 )
 client.negotiate
-connection = client.authenticate(
+authenticated = client.authenticate(
   security_type: RubyVnc::Client::SecurityType::VNC_AUTHENTICATION,
   password: options[:password]
 )
-puts connection
+unless authenticated
+  puts 'Failed authentication'
+  exit 1
+end
+
+client.init
+client.request_framebuffer_update

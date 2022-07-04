@@ -7,7 +7,9 @@ module RubyVnc::Crypto
     # To form the key, the password is truncated
     # to eight characters, or padded with null bytes on the right
     truncated_password = password[0...8].ljust(8, "\x00")
-    # Flip bits as per https://www.vidarholen.net/contents/junk/vnc.html
+    # Flip bits as per the errata
+    # https://www.rfc-editor.org/errata_search.php?rfc=6143&rec_status=0
+    # https://www.vidarholen.net/contents/junk/vnc.html
     key = [truncated_password.unpack1('B*').scan(/.{8}/).map(&:reverse).join].pack('B*')
 
     result = ''.b

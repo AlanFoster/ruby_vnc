@@ -5,11 +5,15 @@ class RubyVnc::SynchronousReaderWriter
     @socket = socket
   end
 
-  def read(maxlen = 65_536)
+  def read(len = 0)
+    result = ''.b
+
     begin
-      result = @socket.read_nonblock(maxlen)
+      while result.length < len
+        result << @socket.read_nonblock(len - result.length)
+      end
     rescue IO::WaitReadable
-      IO.select([@socket])
+      IO.select([@socket], [], [], 1)
       retry
     end
 
@@ -20,7 +24,7 @@ class RubyVnc::SynchronousReaderWriter
     begin
       result = @socket.write_nonblock(value)
     rescue IO::WaitWritable, Errno::EINTR
-      IO.select(nil, [io])
+      IO.select(nil, [@socket])
       retry
     end
     result

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-require 'socket'
-require 'logger'
-require 'bindata'
+autoload :Socket, 'socket'
+autoload :Logger, 'logger'
+autoload :BinData, 'bindata'
+autoload :ChunkyPNG, 'chunky_png'
 
 class RubyVnc::Client
   SUPPORTED_VERSIONS = [
@@ -24,6 +25,39 @@ class RubyVnc::Client
   module SecurityResult
     OK                = 0
     FAILED            = 1
+  end
+
+  # Each request to the server has a specific message type that must be sent
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5
+  module ClientMessageType
+    SET_PIXEL_FORMAT              = 0
+    SET_ENCODINGS                 = 2
+    FRAMEBUFFER_UPDATE_REQUEST    = 3
+    KEY_EVENT                     = 4
+    POINTER_EVENT                 = 5
+    CLIENT_CUT_TEXT               = 6
+  end
+
+  # Each response from the server has a specific message type that must be sent
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.6
+  module ServerMessageType
+    FRAMEBUFFER_UPDATE     = 0
+    SET_COLOR_MAP_ENTRIES  = 1
+    BELL                   = 2
+    SERVER_CUT_TEXT        = 3
+  end
+
+  # The encoding type for the framebuffer rectangle update received from the server
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.7
+  module EncodingType
+    RAW                               = 0
+    COPY_RECT                         = 1
+    RRE                               = 2
+    HEXTILE                           = 5
+    TRLE                              = 15
+    ZRLE                              = 16
+    CURSOR_PSEUDO_ENCODING            = -239
+    DESKTOP_SIZE_PSEUDO_ENCODING      = -223
   end
 
   # The server supported security types
@@ -118,6 +152,216 @@ class RubyVnc::Client
     string :reason_string, read_length: -> { reason_length }
   end
 
+  # Sent by the client to initialize a connection
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.3.1
+  class ClientInit < BinData::Record
+    endian :big
+
+    # True if the server should try to share the
+    # desktop by leaving other clients connected. False if it
+    # should give exclusive access to this client by disconnecting all
+    # other clients
+    #
+    # @!attribute [r] shared_flag
+    #   @return [boolean]
+    uint8 :shared_flag
+  end
+
+  # 16 byte structure describing the way a pixel is transmitted
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.4
+  class PixelFormat < BinData::Record
+    endian :big
+
+    # the number of bits used for each pixel value on the wire
+    # bits-per-pixel must be 8, 16, or 32
+    # @!attribute [r] bit_per_pixel
+    #   @return [Integer]
+    uint8 :bits_per_pixel
+
+    # the number of useful bits in the pixel value
+    # @!attribute [r] bit_per_pixel
+    #   @return [Integer]
+    uint8 :depth
+
+    # Big-endian-flag is non-zero (true) if multi-
+    # byte pixels are interpreted as big endian.
+    # @!attribute [r] big_endian_flag
+    #   @return [Integer]
+    uint8 :big_endian_flag
+
+    # If true-color-flag is non-zero (true), then the last six items
+    # specify how to extract the red, green, and blue intensities
+    # from the pixel value
+    # @!attribute [r] true_color_flag
+    #   @return [Integer]
+    uint8 :true_color_flag
+
+    # maximum red value. Must be 2^N - 1, where N is the number of bits used for red
+    # @!attribute [r] red_max
+    #   @return [Integer]
+    uint16 :red_max
+
+    # @!attribute [r] green_max
+    #   @return [Integer]
+    uint16 :green_max
+
+    # @!attribute [r] blue_max
+    #   @return [Integer]
+    uint16 :blue_max
+
+    # @!attribute [r] red_shift
+    #   @return [Integer]
+    uint8 :red_shift
+
+    # @!attribute [r] green_shift
+    #   @return [Integer]
+    uint8 :green_shift
+
+    # @!attribute [r] blue_shift
+    #   @return [Integer]
+    uint8 :blue_shift
+
+    # Three bytes of padding
+    uint24 :padding
+  end
+
+  # Sent by the server after a ClientInit call is made
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.3.2
+  class ServerInit < BinData::Record
+    endian :big
+
+    # framebuffer-width in pixels
+    #
+    # @!attribute [r] framebuffer_width
+    #   @return [Integer]
+    uint16 :framebuffer_width
+
+    # framebuffer-height in pixels
+    #
+    # @!attribute [r] framebuffer_height
+    #   @return [Integer]
+    uint16 :framebuffer_height
+
+    # describes the way a pixel is transmitted
+    #
+    # @!attribute [r] pixel_format
+    #   @return [Integer]
+    pixel_format :pixel_format
+
+    # the reason_string length
+    # @!attribute [r] name_length
+    #   @return [Integer]
+    uint32 :name_length
+
+    # The name associated with the desktop
+    # @!attribute [r] reason_string
+    #   @return [String]
+    string :name_string, read_length: -> { name_length }
+  end
+
+  # Sent by the client to request an update to the framebuffer within a
+  # specific region
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.3
+  class FramebufferUpdateRequest < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ClientMessageType::FRAMEBUFFER_UPDATE_REQUEST
+
+    # If zero (false) this requests that the server send the entire
+    # contents of the specified area as soon as possible.
+    # @!attribute [r] incremental
+    #   @return [Integer]
+    uint8 :incremental
+
+    # @!attribute [r] x_position
+    #   @return [Integer]
+    uint16 :x_position
+
+    # @!attribute [r] y_position
+    #   @return [Integer]
+    uint16 :y_position
+
+    # @!attribute [r] width
+    #   @return [Integer]
+    uint16 :width
+
+    # @!attribute [r] height
+    #   @return [Integer]
+    uint16 :height
+  end
+
+  # Raw encoding update to the frame buffer
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.7.1
+  class FramebufferUpdateRectangleRaw < BinData::Record
+    endian :big
+
+    # Stop pixels from being logged out to stop cluttering the screen
+    hide :pixels
+
+    # The raw pixel update
+    # @!attribute [r] pixels
+    #   @return [String]
+    string :pixels, read_length: -> { width * height * (config[:bits_per_pixel] / 8) }
+  end
+
+  # Updates to the frame buffer
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.6.1
+  class FramebufferUpdateRectangle < BinData::Record
+    endian :big
+
+    # @!attribute [r] x_position
+    #   @return [Integer]
+    uint16 :x_position
+
+    # @!attribute [r] y_position
+    #   @return [Integer]
+    uint16 :y_position
+
+    # @!attribute [r] width
+    #   @return [Integer]
+    uint16 :width
+
+    # @!attribute [r] height
+    #   @return [Integer]
+    uint16 :height
+
+    # @!attribute [r] encoding_type
+    #   @return [Integer]
+    int32 :encoding_type
+
+    choice :body, selection: -> { encoding_type } do
+      framebuffer_update_rectangle_raw EncodingType::RAW,
+                                       config: -> { config },
+                                       width: -> { width },
+                                       height: -> { height }
+    end
+  end
+
+  # Sent by the client to request an update to the framebuffer within a
+  # specific region
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.6.1
+  class FramebufferUpdate < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ServerMessageType::FRAMEBUFFER_UPDATE
+
+    # @!attribute [r] padding
+    #   @return [Integer]
+    uint8 :padding
+
+    # @!attribute [r] number_of_rectangles
+    #   @return [Integer]
+    uint16 :number_of_rectangles
+
+    # @!attribute [r] rectangles
+    #   @return [Array<RubyVnc::Client::FramebufferRectangleUpdate>]
+    array :rectangles, type: :framebuffer_update_rectangle, initial_length: -> { number_of_rectangles }
+  end
+
   def initialize(
     host: nil,
     port: 5900,
@@ -130,6 +374,7 @@ class RubyVnc::Client
     @logger = logger
   end
 
+  # Negotiate with the server the available methods for authentication
   def negotiate
     @socket ||= open_socket(host: host, port: port)
 
@@ -165,6 +410,7 @@ class RubyVnc::Client
     handshake.security_types
   end
 
+  # Authenticate with the remote server
   def authenticate(security_type:, password: nil)
     unless handshake.security_types.include?(SecurityType::VNC_AUTHENTICATION)
       raise ::RubyVnc::Error::RubyVncError, 'security type not supported by server'
@@ -173,6 +419,7 @@ class RubyVnc::Client
     case security_type
       when SecurityType::NONE
         logger.info('Continuing with no authentication')
+        true
       when SecurityType::VNC_AUTHENTICATION
         authenticate_with_vnc_authentication(password)
       else
@@ -181,6 +428,8 @@ class RubyVnc::Client
     end
   end
 
+  # Use VNC Authentication
+  # @param [String] password
   def authenticate_with_vnc_authentication(password)
     logger.info('authenticating with VNC_AUTHENTICATION')
 
@@ -214,6 +463,96 @@ class RubyVnc::Client
     end
   end
 
+  # Begins the initialization stage between teh client and server
+  # @param [TrueClass] shared True if the server should try to share the
+  #    desktop by leaving other clients connected. False if it
+  #    should give exclusive access to this client by disconnecting all
+  #    other clients
+  def init(shared: true)
+    logger.info('starting initialization stage')
+    client_init = ClientInit.new(shared_flag: shared ? 1 : 0)
+    socket.write(client_init.to_binary_s)
+
+    self.server_init = ServerInit.read(socket)
+    logger.info("server init response #{server_init}")
+  end
+
+  # Request a framebuffer update. The response will be sent asynchronously by the server.
+  # @return [nil]
+  def request_framebuffer_update
+    request = FramebufferUpdateRequest.new(
+      incremental: 0,
+      x_position: 0,
+      y_position: 0,
+      width: server_init.framebuffer_width,
+      height: server_init.framebuffer_height
+    )
+    socket.write(request.to_binary_s)
+
+    # Note there may be an indefinite period of time before receiving the response
+    logger.info('waiting for server frame buffer update')
+    response = nil
+    BinData::trace_reading do
+      response = FramebufferUpdate.read(
+        socket,
+        config: {
+          framebuffer_width: server_init.framebuffer_width,
+          framebuffer_height: server_init.framebuffer_height,
+          bits_per_pixel: server_init.pixel_format.bits_per_pixel
+        }
+      )
+    end
+    logger.info("received frame buffer update response #{response}")
+
+    bits_per_pixel = server_init.pixel_format.bits_per_pixel
+    framebuffer = Array.new(server_init.framebuffer_width * server_init.framebuffer_height, 0)
+    response.rectangles.each_with_index do |rectangle, index|
+      case rectangle.body.selection
+      when EncodingType::RAW
+        # In raw mode, the pixels are represented in left-to-right scan line order
+        pixels = rectangle.body.pixels.unpack("C*")
+        bytes_per_pixel = bits_per_pixel / 8
+        framebuffer_width = server_init.framebuffer_width
+
+        pixel_index = 0
+        y_pixel_range = (rectangle.y_position...rectangle.y_position + rectangle.height)
+        x_pixel_range = (rectangle.x_position...rectangle.x_position + rectangle.width)
+
+        y_pixel_range.each do |y|
+          x_pixel_range.each do |x|
+            # equivalent to pixel_for(x, y) but inlined for performance
+            framebuffer_index = (y * framebuffer_width) + x
+            # red / green / blue
+            framebuffer[framebuffer_index] =
+              # red
+              pixels[pixel_index] << 24 |
+              # green
+              pixels[pixel_index + 1] << 16 |
+              # blue
+              pixels[pixel_index + 2] << 8 |
+              # alpha
+              0xff
+            pixel_index += bytes_per_pixel
+          end
+        end
+      else
+        logger.error("unsupported update #{rectangle.body.selection}")
+      end
+    end
+
+    logger.info("saving")
+
+    image = ChunkyPNG::Image.new(
+      server_init.framebuffer_width,
+      server_init.framebuffer_height,
+      framebuffer
+    )
+
+    image.save('tmp/0.png', interlace: false)
+
+    nil
+  end
+
   protected
 
   # The non-blocking socket that data will be written to/read from
@@ -241,7 +580,20 @@ class RubyVnc::Client
   #   @return [RubyVnc::Client::SecurityHandshake]
   attr_accessor :handshake
 
+  # The ServerInit response generated by the server
+  # @!attribute [rw] handshake
+  #   @return [RubyVnc::Client::ServerInit]
+  attr_accessor :server_init
+
   def open_socket(host:, port:)
+    socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM, 0)
+    socket_addr = Socket.sockaddr_in(port, host)
+
+    socket.connect(socket_addr)
+    socket
+  end
+
+  def open_socket_async(host:, port:)
     socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM, 0)
     socket_addr = Socket.sockaddr_in(port, host)
 
