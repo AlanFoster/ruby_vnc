@@ -7,7 +7,8 @@ require 'optparse'
 options = {
   port: 5900,
   verbose: true,
-  password: nil
+  password: nil,
+  encodings: RubyVnc::Client::DEFAULT_ENCODINGS
 }
 options_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} [options]"
@@ -31,6 +32,17 @@ options_parser = OptionParser.new do |opts|
   opts.on('--verbose', 'Enable verbose logging') do |verbose|
     options[:verbose] = verbose
   end
+
+  opts.on('--encodings x,y,z', Array, 'User defined encodings') do |encoding_names|
+    options[:encodings] = encoding_names.map do |name|
+      name = name.upcase
+      unless RubyVnc::Client::EncodingType.const_defined?(name)
+        raise "Unexpected encoding name #{name}, expected one of #{RubyVnc::Client::EncodingType.join(', ')}"
+      end
+
+      RubyVnc::Client::EncodingType.const_get(name)
+    end
+  end
 end
 options_parser.parse!
 
@@ -43,7 +55,8 @@ end
 client = RubyVnc::Client.new(
   host: options[:host],
   port: options[:port],
-  logger: options[:verbose] ? Logger.new(STDOUT) : Logger.new(nil)
+  logger: options[:verbose] ? Logger.new($stdout) : Logger.new(nil),
+  encodings: options[:encodings]
 )
 client.negotiate
 authenticated = client.authenticate(
