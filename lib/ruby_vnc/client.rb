@@ -6,11 +6,6 @@ autoload :BinData, 'bindata'
 autoload :ChunkyPNG, 'chunky_png'
 
 class RubyVnc::Client
-  SUPPORTED_VERSIONS = [
-    RubyVnc::ProtocolVersion.new(3, 3),
-    RubyVnc::ProtocolVersion.new(3, 8),
-  ].freeze
-
   # https://datatracker.ietf.org/doc/html/rfc6143#section-8.1.2
   module SecurityType
     INVALID            = 0
@@ -50,15 +45,31 @@ class RubyVnc::Client
   # The encoding type for the framebuffer rectangle update received from the server
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.7
   module EncodingType
+    # The raw bytes are sent for each rectangle update
     RAW                               = 0
+
+    # Copy framebuffer data that already exists. Efficient for handling windows scrolling/moving
     COPY_RECT                         = 1
+
+    # Rise and run length encoding
     RRE                               = 2
+
     HEXTILE                           = 5
+    TIGHT                             = 7
     TRLE                              = 15
     ZRLE                              = 16
     CURSOR_PSEUDO_ENCODING            = -239
     DESKTOP_SIZE_PSEUDO_ENCODING      = -223
   end
+
+  SUPPORTED_VERSIONS = [
+    RubyVnc::ProtocolVersion.new(3, 3),
+    RubyVnc::ProtocolVersion.new(3, 8),
+  ].freeze
+
+  SUPPORTED_ENCODINGS = [
+    EncodingType::RAW
+  ].freeze
 
   # The server supported security types
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.1.2
@@ -221,7 +232,9 @@ class RubyVnc::Client
     #   @return [Integer]
     uint8 :blue_shift
 
-    # Three bytes of padding
+    # three bytes of padding
+    # @!attribute [r] padding
+    #   @return [Integer]
     uint24 :padding
   end
 
@@ -257,6 +270,48 @@ class RubyVnc::Client
     # @!attribute [r] reason_string
     #   @return [String]
     string :name_string, read_length: -> { name_length }
+  end
+
+  # Sent by the client to set on the server the supported encoding types
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.1
+  class SetPixelFormatRequest < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ClientMessageType::SET_PIXEL_FORMAT
+
+    # three bytes of padding
+    # @!attribute [r] padding
+    #   @return [Integer]
+    uint24 :padding
+
+    # @!attribute [r] pixel_format
+    #   @return [Integer]
+    pixel_format :pixel_format
+  end
+
+  # Sent by the client to set on the server the supported encoding types
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.2
+  class SetEncodingsRequest < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ClientMessageType::SET_ENCODINGS
+
+    # @!attribute [r] padding
+    #   @return [Integer]
+    uint8 :padding
+
+    # @!attribute [r] number_of_encodings
+    #   @return [Integer]
+    uint16 :number_of_encodings, value: -> { self.encoding_types.length }
+
+    # @!attribute [r] encoding_types
+    #   @return [Array<Integer>]
+    #   @see RubyVnc::Client::EncodingType
+    array :encoding_types, type: :int32
   end
 
   # Sent by the client to request an update to the framebuffer within a
@@ -475,6 +530,38 @@ class RubyVnc::Client
 
     self.server_init = ServerInit.read(socket)
     logger.info("server init response #{server_init}")
+
+    set_pixel_format
+    set_encodings
+  end
+
+  def set_pixel_format
+    set_encodings_request = SetPixelFormatRequest.new(
+      pixel_format: {
+        bits_per_pixel: 32,
+        depth: 24,
+        big_endian_flag: 0,
+        true_color_flag: 1,
+        red_max: 255,
+        green_max: 255,
+        blue_max: 255,
+        red_shift: 16,
+        green_shift: 8,
+        blue_shift: 0
+      }
+    )
+    socket.write(set_encodings_request.to_binary_s)
+
+    nil
+  end
+
+  def set_encodings(encoding_types: SUPPORTED_ENCODINGS)
+    set_encodings_request = SetEncodingsRequest.new(
+      encoding_types: encoding_types
+    )
+    socket.write(set_encodings_request.to_binary_s)
+
+    nil
   end
 
   # Request a framebuffer update. The response will be sent asynchronously by the server.
@@ -491,17 +578,14 @@ class RubyVnc::Client
 
     # Note there may be an indefinite period of time before receiving the response
     logger.info('waiting for server frame buffer update')
-    response = nil
-    BinData::trace_reading do
-      response = FramebufferUpdate.read(
-        socket,
-        config: {
-          framebuffer_width: server_init.framebuffer_width,
-          framebuffer_height: server_init.framebuffer_height,
-          bits_per_pixel: server_init.pixel_format.bits_per_pixel
-        }
-      )
-    end
+    response = FramebufferUpdate.read(
+      socket,
+      config: {
+        framebuffer_width: server_init.framebuffer_width,
+        framebuffer_height: server_init.framebuffer_height,
+        bits_per_pixel: server_init.pixel_format.bits_per_pixel
+      }
+    )
     logger.info("received frame buffer update response #{response}")
 
     bits_per_pixel = server_init.pixel_format.bits_per_pixel
@@ -522,14 +606,15 @@ class RubyVnc::Client
           x_pixel_range.each do |x|
             # equivalent to pixel_for(x, y) but inlined for performance
             framebuffer_index = (y * framebuffer_width) + x
+
             # red / green / blue
             framebuffer[framebuffer_index] =
               # red
-              pixels[pixel_index] << 24 |
+              pixels[pixel_index + 2] << 24 |
               # green
               pixels[pixel_index + 1] << 16 |
               # blue
-              pixels[pixel_index + 2] << 8 |
+              pixels[pixel_index] << 8 |
               # alpha
               0xff
             pixel_index += bytes_per_pixel
@@ -585,15 +670,15 @@ class RubyVnc::Client
   #   @return [RubyVnc::Client::ServerInit]
   attr_accessor :server_init
 
+  # def open_socket(host:, port:)
+  #   socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM)
+  #   socket_addr = Socket.sockaddr_in(port, host)
+  #
+  #   socket.connect(socket_addr)
+  #   socket
+  # end
+
   def open_socket(host:, port:)
-    socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM, 0)
-    socket_addr = Socket.sockaddr_in(port, host)
-
-    socket.connect(socket_addr)
-    socket
-  end
-
-  def open_socket_async(host:, port:)
     socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM, 0)
     socket_addr = Socket.sockaddr_in(port, host)
 

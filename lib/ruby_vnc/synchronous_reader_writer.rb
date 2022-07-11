@@ -13,7 +13,7 @@ class RubyVnc::SynchronousReaderWriter
         result << @socket.read_nonblock(len - result.length)
       end
     rescue IO::WaitReadable
-      IO.select([@socket], [], [], 1)
+      IO.select([@socket], [], [])
       retry
     end
 

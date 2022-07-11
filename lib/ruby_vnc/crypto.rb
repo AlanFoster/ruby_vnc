@@ -12,11 +12,13 @@ module RubyVnc::Crypto
     # https://www.vidarholen.net/contents/junk/vnc.html
     key = [truncated_password.unpack1('B*').scan(/.{8}/).map(&:reverse).join].pack('B*')
 
+    cipher = OpenSSL::Cipher.new('des')
+    cipher.encrypt
+    cipher.key = key
+
     result = ''.b
     2.times do |i|
-      cipher = OpenSSL::Cipher.new('des')
-      cipher.encrypt
-      cipher.key = key
+      cipher.reset
       result << cipher.update(challenge[i * 8, 8])
     end
 
