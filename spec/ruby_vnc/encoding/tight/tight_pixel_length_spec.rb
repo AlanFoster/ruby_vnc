@@ -1,6 +1,6 @@
 require 'rspec'
 
-RSpec.describe RubyVnc::Client::TightPixelLength do
+RSpec.describe RubyVnc::Decoder::Tight::TightPixelLength do
   describe '#read' do
     context 'when 0..127' do
       it 'reads the correct value' do

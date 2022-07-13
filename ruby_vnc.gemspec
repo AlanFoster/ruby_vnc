@@ -22,4 +22,5 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency 'bindata'
   spec.add_runtime_dependency 'chunky_png'
+  spec.add_runtime_dependency 'zeitwerk'
 end

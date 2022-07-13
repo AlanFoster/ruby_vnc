@@ -1,0 +1,2 @@
+module RubyVnc::Decoder
+end
