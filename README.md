@@ -80,6 +80,12 @@ Specify a custom port, password, and encoding:
 bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings raw
 ```
 
+Take a screenshot:
+
+```
+bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings raw --screenshot ./tmp/result.png
+```
+
 ## Development
 
 Install dependencies:

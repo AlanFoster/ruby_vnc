@@ -689,7 +689,7 @@ class RubyVnc::Client
       end
     end
 
-    logger.info('saving')
+    logger.info("saving to path #{path}")
     image = ChunkyPNG::Image.new(
       state.width,
       state.height,

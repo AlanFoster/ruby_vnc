@@ -8,7 +8,8 @@ options = {
   port: 5900,
   verbose: true,
   password: nil,
-  encodings: RubyVnc::Client::DEFAULT_ENCODINGS
+  encodings: RubyVnc::Client::DEFAULT_ENCODINGS,
+  screenshot_path: nil
 }
 options_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} [options]"
@@ -43,6 +44,10 @@ options_parser = OptionParser.new do |opts|
       RubyVnc::Client::EncodingType.const_get(name)
     end
   end
+
+  opts.on('--screenshot path', 'Screenshot target path') do |screenshot_path|
+    options[:screenshot_path] = screenshot_path
+  end
 end
 options_parser.parse!
 
@@ -70,3 +75,4 @@ end
 
 client.init
 client.request_framebuffer_update
+client.screenshot(path: options[:screenshot_path]) if options[:screenshot_path]
