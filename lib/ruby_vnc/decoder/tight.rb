@@ -182,12 +182,12 @@ class RubyVnc::Decoder::Tight
     @logger = logger
   end
 
-  # @param [object] state the state
-  # @param [object] rectangle the rectangle
-  # @param [Array<Integer>] framebuffer iThe current framebuffer of size width * height
+  # @param [RubyVnc::Client::ClientState] state the current client state
+  # @param [RubyVnc::Client::FramebufferUpdateRectangle] rectangle the parsed rectangle object
+  # @param [Array<Integer>] framebuffer The current framebuffer of size width * height
   # @return [nil] The frame buffer should be directly mutated
   def decode(state, rectangle, framebuffer)
-    framebuffer_width = state[:width]
+    framebuffer_width = state.width
     compression_type = rectangle.body.compression_type
 
     # Reset any of the zlib instances specified by the server
@@ -221,11 +221,11 @@ class RubyVnc::Decoder::Tight
             # red / green / blue
             framebuffer[framebuffer_index] =
               # red
-              pixels[pixel_index + 2] << 24 |
+              pixels[pixel_index] << 24 |
                 # green
                 pixels[pixel_index + 1] << 16 |
                 # blue
-                pixels[pixel_index] << 8 |
+                pixels[pixel_index + 2] << 8 |
                 # alpha
                 0xff
             pixel_index += bytes_per_pixel

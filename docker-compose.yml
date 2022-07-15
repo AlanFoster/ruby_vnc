@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  service :
+    image: dorowu/ubuntu-desktop-lxde-vnc
+    ports:
+      - "5902:5900"
+    environment:
+      - VNC_PASSWORD=password123
+      - RESOLUTION=800x600

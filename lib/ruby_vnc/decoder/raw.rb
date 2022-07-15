@@ -2,8 +2,8 @@
 
 # The Raw decoder which implements decoding https://datatracker.ietf.org/doc/html/rfc6143#section-7.7.1
 class RubyVnc::Decoder::Raw < RubyVnc::Decoder::Base
-  # @param [object] state the state
-  # @param [Rectangle] rectangle the rectangle
+  # @param [RubyVnc::Client::ClientState] state the current client state
+  # @param [RubyVnc::Client::FramebufferUpdateRectangle] rectangle the parsed rectangle object
   # @param [Array<Integer>] framebuffer The current framebuffer of size width * height
   # @return [nil] The frame buffer should be directly mutated
   def decode(state, rectangle, framebuffer)
@@ -13,15 +13,15 @@ class RubyVnc::Decoder::Raw < RubyVnc::Decoder::Base
     update_framebuffer_from_raw_pixels(state, rectangle, framebuffer, pixels)
   end
 
-  # @param [object] state the state
-  # @param [Rectangle] rectangle the rectangle
+  # @param [RubyVnc::Client::ClientState] state the current client state
+  # @param [RubyVnc::Client::FramebufferUpdateRectangle] rectangle the parsed rectangle object
   # @param [Array<Integer>] framebuffer The current framebuffer of size width * height
   # @param [Array<Integer>] pixels the raw pixels
   # @return [nil] The frame buffer should be directly mutated
   def update_framebuffer_from_raw_pixels(state, rectangle, framebuffer, pixels)
     # In raw mode, the pixels are represented in left-to-right scan line order
-    bytes_per_pixel = state[:bytes_per_pixel]
-    framebuffer_width = state[:width]
+    bytes_per_pixel = state.bytes_per_pixel
+    framebuffer_width = state.width
 
     pixel_index = 0
     y_pixel_range = (rectangle.y_position...rectangle.y_position + rectangle.height)

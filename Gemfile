@@ -9,3 +9,7 @@ group :development do
   gem 'benchmark-ips'
   gem 'pry-byebug'
 end
+
+group :test do
+  gem 'tcr'
+end

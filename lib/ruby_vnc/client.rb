@@ -450,6 +450,34 @@ class RubyVnc::Client
     array :rectangles, type: :framebuffer_update_rectangle, initial_length: -> { number_of_rectangles }
   end
 
+  class ClientState
+    # @!attribute [r] bits_per_pixel
+    #   @return [Integer]
+    attr_reader :bits_per_pixel
+
+    # @!attribute [r] width
+    #   @return [Integer]
+    attr_reader :width
+
+    # @!attribute [r] height
+    #   @return [Integer]
+    attr_reader :height
+
+    def initialize(
+      bits_per_pixel:,
+      width:,
+      height:
+    )
+      @bits_per_pixel = bits_per_pixel
+      @width = width
+      @height = height
+    end
+
+    def bytes_per_pixel
+      bits_per_pixel / 8
+    end
+  end
+
   def initialize(
     host: nil,
     port: 5900,
@@ -620,28 +648,34 @@ class RubyVnc::Client
     )
     socket.write(request.to_binary_s)
 
+    nil
+  end
+
+  # Requests a framebuffer update, and blocks synchronously until the framebuffer can be updated.
+  # the result is then saved to file path
+  # @param [String] path the result path
+  def screenshot(path:)
+    request_framebuffer_update
+
     # Note there may be an indefinite period of time before receiving the response
     logger.info('waiting for server frame buffer update')
-    response = nil
-    BinData.trace_reading do
-      response = FramebufferUpdate.read(
-        socket,
-        config: {
-          framebuffer_width: server_init.framebuffer_width,
-          framebuffer_height: server_init.framebuffer_height,
-          bits_per_pixel: server_init.pixel_format.bits_per_pixel
-        }
-      )
-    end
+
+    response = FramebufferUpdate.read(
+      socket,
+      config: {
+        framebuffer_width: server_init.framebuffer_width,
+        framebuffer_height: server_init.framebuffer_height,
+        bits_per_pixel: server_init.pixel_format.bits_per_pixel
+      }
+    )
+
     logger.info("received frame buffer update response #{response}")
 
-
-    state = {
+    state = ClientState.new(
       bits_per_pixel: server_init.pixel_format.bits_per_pixel,
-      bytes_per_pixel: server_init.pixel_format.bits_per_pixel / 8,
       width: server_init.framebuffer_width,
       height: server_init.framebuffer_height
-    }
+    )
 
     framebuffer = Array.new(server_init.framebuffer_width * server_init.framebuffer_height, 0)
     response.rectangles.each_with_index do |rectangle, _index|
@@ -655,16 +689,16 @@ class RubyVnc::Client
       end
     end
 
-    logger.info("saving")
+    logger.info('saving')
     image = ChunkyPNG::Image.new(
-      server_init.framebuffer_width,
-      server_init.framebuffer_height,
+      state.width,
+      state.height,
       framebuffer
     )
 
-    image.save('tmp/0.png', interlace: false)
+    image.save(path, interlace: false)
 
-    nil
+    path
   end
 
   protected
@@ -712,8 +746,8 @@ class RubyVnc::Client
   attr_accessor :decoders
 
   # def open_socket(host:, port:)
-  #   socket = Socket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM)
-  #   socket_addr = Socket.sockaddr_in(port, host)
+  #   socket = ::TcpSocket.openSocket.new(::Socket::AF_INET, ::Socket::SOCK_STREAM)
+  #   socket_addr = ::Socket.sockaddr_in(port, host)
   #
   #   socket.connect(socket_addr)
   #   socket

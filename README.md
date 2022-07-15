@@ -17,15 +17,24 @@ gem 'ruby_vnc'
 
 And then execute:
 
-    $ bundle install
+```
+bundle install
+```
 
 Or install it yourself as:
+```
+gem install ruby_vnc
+```
 
-    $ gem install ruby_vnc
+## Targets
 
-## Usage
+Either create a real VNC server and connect to it. Or create a local VNC server with docker:
 
-Create either a real VNC server, or a fake server with:
+```
+docker-compose up
+```
+
+Or create a fake server with:
 
 ```
 # Create a password configuration file
@@ -57,16 +66,33 @@ Using default colormap which is TrueColor.  Pixel format:
 Same machine: preferring raw encoding
 ```
 
-Connect via the Ruby client:
+## Examples
+
+Connect to the VNC Server:
+
 ```
 ruby ./examples/example.rb --host 172.16.83.2
 ```
 
+Specify a custom port, password, and encoding:
+
+```
+bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings raw
+```
+
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+Install dependencies:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```
+bundle install
+```
+
+Run tests:
+
+```
+bundle exec rspec
+```
 
 ## License
 

@@ -37,7 +37,7 @@ options_parser = OptionParser.new do |opts|
     options[:encodings] = encoding_names.map do |name|
       name = name.upcase
       unless RubyVnc::Client::EncodingType.const_defined?(name)
-        raise "Unexpected encoding name #{name}, expected one of #{RubyVnc::Client::EncodingType.join(', ')}"
+        raise "Unexpected encoding name #{name}, expected one of #{RubyVnc::Client::EncodingType.constants.join(', ')}"
       end
 
       RubyVnc::Client::EncodingType.const_get(name)
