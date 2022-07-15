@@ -5,7 +5,13 @@ Prototype for consuming parts of the VNC Protocol.
 - [Official RFB Specification](https://datatracker.ietf.org/doc/html/rfc6143)
 - [Improved community maintained RFB specification](https://github.com/rfbproto/rfbproto)
 
-Only handles authentication, and does not render anything to a screen.
+Handles negotiation, authentication (None and VNC), setting frame pixel format, requesting screen buffer updates,
+saving a screenshot to file.
+
+Supported encodings:
+- Raw
+- Zlib
+- Tight
 
 ## Installation
 

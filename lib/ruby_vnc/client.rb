@@ -652,7 +652,7 @@ class RubyVnc::Client
   end
 
   # Requests a framebuffer update, and blocks synchronously until the framebuffer can be updated.
-  # the result is then saved to file path
+  # The result is then saved to file path
   # @param [String] path the result path
   def screenshot(path:)
     request_framebuffer_update
