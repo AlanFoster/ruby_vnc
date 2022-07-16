@@ -20,7 +20,6 @@ def self.extend(mod)
 end
 
 autoload :Ruby2D, 'ruby2d'
-autoload :ChunkyPNG, 'chunky_png'
 
 class RubyVnc::Gui::Window
   # @param [RubyVnc::Client] client
@@ -84,9 +83,9 @@ class RubyVnc::Gui::Window
         # Are we the first request?
         last_update_request.nil? ||
           # Has a certain amount of time passed since the last request?
-          (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request > 20000) ||
+          (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request > 1000) ||
           # Has an update been requested by an event handler? Event handler requests can still be throttled, i.e. for mouse moves
-          (update_requested && (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request) > 2000)
+          (update_requested && (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request) > 500)
       )
 
       if requires_framebuffer_update_request
@@ -102,13 +101,7 @@ class RubyVnc::Gui::Window
       # Write the framebuffer to disk for now as Ruby2D doesn't expose setting a raw buffer
       if has_updated
         logger.info('Saving to disk to update GUI')
-        persisted_image = ChunkyPNG::Image.new(
-          client.state.width,
-          client.state.height,
-          client.state.framebuffer
-        )
-
-        persisted_image.save(@filesystem_framebuffer_path, interlace: false)
+        client.state.framebuffer.save(@filesystem_framebuffer_path)
         window.remove(previous_image) if previous_image
 
         image = ::Ruby2D::Image.new(@filesystem_framebuffer_path)

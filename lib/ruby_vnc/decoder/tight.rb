@@ -207,35 +207,19 @@ class RubyVnc::Decoder::Tight
         target_stream = rectangle.body.compression.target_stream
         pixels = rectangle.body.compression.filter_value.pixels
         pixel_string = zlib_instances[target_stream].inflate(pixels)
-        pixels = pixel_string.unpack("C*")
 
-        # In tight compression mode, the rgb pixels are represented in left-to-right scan line order
-        bytes_per_pixel = 24 / 8
+        # convert 8 bit RGB pixels to RGB format
+        pixels = pixel_string.unpack("C*").each_slice(3)
 
-        pixel_index = 0
-        y_pixel_range = (rectangle.y_position...rectangle.y_position + rectangle.height)
-        x_pixel_range = (rectangle.x_position...rectangle.x_position + rectangle.width)
-
-        y_pixel_range.each do |y|
-          x_pixel_range.each do |x|
-            # equivalent to pixel_for(x, y) but inlined for performance
-            framebuffer_index = (y * framebuffer_width) + x
-
-            # red / green / blue
-            framebuffer[framebuffer_index] =
-              # red
-              pixels[pixel_index] << 24 |
-                # green
-                pixels[pixel_index + 1] << 16 |
-                # blue
-                pixels[pixel_index + 2] << 8 |
-                # alpha
-                0xff
-            pixel_index += bytes_per_pixel
-          end
-        end
+        framebuffer.update_pixels(
+          rectangle.x_position,
+          rectangle.y_position,
+          rectangle.width,
+          rectangle.height,
+          pixels
+        )
       when BasicCompressionFilterType::PALETTE_FILTER
-          logger.info("unhandled filter type palette")
+        logger.info("unhandled filter type palette")
       else
         logger.info("Unhandled filter type #{filter_id}")
       end
@@ -243,22 +227,21 @@ class RubyVnc::Decoder::Tight
       # Apply a single color to a full rectangle
     when TightCompressionType::FILL_COMPRESSION
       fill_color = rectangle.body.compression.fill_color
-      new_pixel =
-        fill_color << 8 |
-          # alpha
-          0xff
+      # convert 8 bit RGB pixels to RGB format
+      rgb = [
+        (fill_color >> 16 & 0xff),
+        (fill_color >> 8 & 0xff),
+        (fill_color >> 0 & 0xff)
+      ]
+      pixels = (rectangle.width * rectangle.height).times.lazy.map { rgb }
 
-      framebuffer_width = state.width
-
-      y_pixel_range = (rectangle.y_position...rectangle.y_position + rectangle.height)
-      x_pixel_range = (rectangle.x_position...rectangle.x_position + rectangle.width)
-      y_pixel_range.each do |y|
-        x_pixel_range.each do |x|
-          # equivalent to pixel_for(x, y) but inlined for performance
-          framebuffer_index = (y * framebuffer_width) + x
-          framebuffer[framebuffer_index] = new_pixel
-        end
-      end
+      framebuffer.update_pixels(
+        rectangle.x_position,
+        rectangle.y_position,
+        rectangle.width,
+        rectangle.height,
+        pixels
+      )
     else
       logger.error("Unsupported compression type #{compression_type}")
     end

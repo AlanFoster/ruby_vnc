@@ -3,7 +3,6 @@
 autoload :Socket, 'socket'
 autoload :Logger, 'logger'
 autoload :BinData, 'bindata'
-autoload :ChunkyPNG, 'chunky_png'
 
 class RubyVnc::Client
 
@@ -504,7 +503,7 @@ class RubyVnc::Client
       height:,
       framebuffer: nil
     )
-      @framebuffer = framebuffer || Array.new(width * height, 0),
+      @framebuffer = framebuffer || RubyVnc::Framebuffer.new(width, height)
       @bits_per_pixel = bits_per_pixel
       @width = width
       @height = height
@@ -775,13 +774,7 @@ class RubyVnc::Client
     decode_framebuffer_update(update_response)
 
     logger.info("saving to path #{path}")
-    image = ChunkyPNG::Image.new(
-      state.width,
-      state.height,
-      state.framebuffer
-    )
-
-    image.save(path, interlace: false)
+    state.framebuffer.save(path)
 
     path
   end

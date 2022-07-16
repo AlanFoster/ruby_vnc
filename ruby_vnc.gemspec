@@ -22,6 +22,6 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency 'bindata'
   spec.add_runtime_dependency 'ruby2d'
-  spec.add_runtime_dependency 'chunky_png'
   spec.add_runtime_dependency 'zeitwerk'
+  spec.add_runtime_dependency 'rmagick'
 end

@@ -66,7 +66,7 @@ RSpec.describe 'RubyVNC', type: :feature do
   context 'when using authentication' do
     it 'supports taking a screenshot' do |example|
       output_path, expected_path = screenshot_paths_for(example)
-      expect(take_screenshot(path: output_path)).to eq(load_expected_screenshot(expected_path, fallback: output_path))
+      expect(take_screenshot(path: output_path) == load_expected_screenshot(expected_path, fallback: output_path)).to be true
     end
 
     context 'when using raw encoding' do
@@ -74,7 +74,7 @@ RSpec.describe 'RubyVNC', type: :feature do
 
       it 'supports taking a screenshot' do |example|
         output_path, expected_path = screenshot_paths_for(example)
-        expect(take_screenshot(path: output_path)).to eq(load_expected_screenshot(expected_path, fallback: output_path))
+        expect(take_screenshot(path: output_path) == load_expected_screenshot(expected_path, fallback: output_path)).to be true
       end
     end
 
@@ -83,7 +83,7 @@ RSpec.describe 'RubyVNC', type: :feature do
 
       it 'supports taking a screenshot' do |example|
         output_path, expected_path = screenshot_paths_for(example)
-        expect(take_screenshot(path: output_path)).to eq(load_expected_screenshot(expected_path, fallback: output_path))
+        expect(take_screenshot(path: output_path) == load_expected_screenshot(expected_path, fallback: output_path)).to be true
       end
     end
 
@@ -92,7 +92,7 @@ RSpec.describe 'RubyVNC', type: :feature do
 
       it 'supports taking a screenshot' do |example|
         output_path, expected_path = screenshot_paths_for(example)
-        expect(take_screenshot(path: output_path)).to eq(load_expected_screenshot(expected_path, fallback: output_path))
+        expect(take_screenshot(path: output_path) == load_expected_screenshot(expected_path, fallback: output_path)).to be true
       end
     end
   end
