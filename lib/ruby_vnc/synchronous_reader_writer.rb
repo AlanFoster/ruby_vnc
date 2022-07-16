@@ -29,4 +29,8 @@ class RubyVnc::SynchronousReaderWriter
     end
     result
   end
+
+  def to_io
+    @socket.to_io
+  end
 end

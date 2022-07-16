@@ -32,6 +32,32 @@ Or install it yourself as:
 gem install ruby_vnc
 ```
 
+## Examples
+
+Connect to the VNC Server:
+
+```
+bundle exec ruby ./examples/example.rb --host 172.16.83.2
+```
+
+Specify a custom port, password, and encoding:
+
+```
+bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings tight
+```
+
+Take a screenshot:
+
+```
+bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --screenshot ./tmp/result.png
+```
+
+Open a interactive GUI:
+
+```
+bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --gui
+```
+
 ## Targets
 
 Either create a real VNC server and connect to it. Or create a local VNC server with docker:
@@ -70,26 +96,6 @@ Using default colormap which is TrueColor.  Pixel format:
   Least significant byte first in each pixel.
   True colour: max red 255 green 255 blue 255, shift red 16 green 8 blue 0
 Same machine: preferring raw encoding
-```
-
-## Examples
-
-Connect to the VNC Server:
-
-```
-ruby ./examples/example.rb --host 172.16.83.2
-```
-
-Specify a custom port, password, and encoding:
-
-```
-bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings raw
-```
-
-Take a screenshot:
-
-```
-bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --encodings raw --screenshot ./tmp/result.png
 ```
 
 ## Development

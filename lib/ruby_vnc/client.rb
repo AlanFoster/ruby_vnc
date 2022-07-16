@@ -282,6 +282,37 @@ class RubyVnc::Client
     string :name_string, read_length: -> { name_length }
   end
 
+  # the button mask index used as part of a pointer event
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.5
+  module ButtonMask
+    LEFT        = 0
+    MIDDLE      = 1
+    RIGHT       = 2
+  end
+
+  # Sent by the client when there is a pointer event, such as
+  # movement/clicking
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.5
+  class PointerEventRequest < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ClientMessageType::POINTER_EVENT
+
+    # @!attribute [r] button_mask
+    #   @return [Integer]
+    uint8 :button_mask
+
+    # @!attribute [r] x_position
+    #   @return [Integer]
+    uint16 :x_position
+
+    # @!attribute [r] y_position
+    #   @return [Integer]
+    uint16 :y_position
+  end
+
   # Sent by the client to set on the server the supported encoding types
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.1
   class SetPixelFormatRequest < BinData::Record
@@ -368,7 +399,7 @@ class RubyVnc::Client
     # The raw pixel update
     # @!attribute [r] pixels
     #   @return [String]
-    string :pixels, read_length: -> { width * height * (config[:bits_per_pixel] / 8) }
+    string :pixels, read_length: -> { width * height * client_state.bytes_per_pixel }
   end
 
   # Zlib encoding update to the frame buffer, which is a zlib compression of a raw rectangle update
@@ -416,9 +447,9 @@ class RubyVnc::Client
 
     choice :body, selection: -> { encoding_type } do
       framebuffer_update_rectangle_raw EncodingType::RAW,
-                                       config: -> { config },
                                        width: -> { width },
-                                       height: -> { height }
+                                       height: -> { height },
+                                       client_state: -> { client_state }
 
       framebuffer_update_rectangle_zlib EncodingType::ZLIB
 
@@ -463,11 +494,17 @@ class RubyVnc::Client
     #   @return [Integer]
     attr_reader :height
 
+    # @!attribute [rw] framebuffer
+    #   @return [Array<Int>] The framebuffer array
+    attr_accessor :framebuffer
+
     def initialize(
       bits_per_pixel:,
       width:,
-      height:
+      height:,
+      framebuffer: nil
     )
+      @framebuffer = framebuffer || Array.new(width * height, 0),
       @bits_per_pixel = bits_per_pixel
       @width = width
       @height = height
@@ -477,6 +514,11 @@ class RubyVnc::Client
       bits_per_pixel / 8
     end
   end
+
+  # The client state, set after a successful init
+  # @!attribute [rw] state
+  #   @return [RubyVnc::Client::ClientState]
+  attr_accessor :state
 
   def initialize(
     host: nil,
@@ -597,11 +639,17 @@ class RubyVnc::Client
     client_init = ClientInit.new(shared_flag: shared ? 1 : 0)
     socket.write(client_init.to_binary_s)
 
-    self.server_init = ServerInit.read(socket)
+    server_init = ServerInit.read(socket)
     logger.info("server init response #{server_init}")
 
     set_pixel_format
     set_encodings
+
+    @state = ClientState.new(
+      bits_per_pixel: server_init.pixel_format.bits_per_pixel,
+      width: server_init.framebuffer_width,
+      height: server_init.framebuffer_height
+    )
   end
 
   def set_pixel_format
@@ -636,64 +684,101 @@ class RubyVnc::Client
     nil
   end
 
-  # Request a framebuffer update. The response will be sent asynchronously by the server.
+  # @param [Integer] x
+  # @param [Integer] y
   # @return [nil]
-  def request_framebuffer_update
+  def move_pointer(x, y, pointer_state = nil)
+    socket.write(
+      PointerEventRequest.new(
+        x_position: x,
+        y_position: y,
+        button_mask: as_button_mask(pointer_state)
+      ).to_binary_s
+    )
+
+    nil
+  end
+
+  # @param [Integer] x
+  # @param [Integer] y
+  # @return [nil]
+  def click_pointer(x, y, pointer_state = { left: true })
+    socket.write(
+      PointerEventRequest.new(
+        x_position: x,
+        y_position: y,
+        button_mask: as_button_mask(pointer_state)
+      ).to_binary_s
+    )
+
+    nil
+  end
+
+  def as_button_mask(pointer_state)
+    mask = 0
+    return mask if pointer_state.nil?
+
+    mask |= (1 << ButtonMask::LEFT) if pointer_state[:left]
+    mask |= (1 << ButtonMask::MIDDLE) if pointer_state[:middle]
+    mask |= (1 << ButtonMask::RIGHT) if pointer_state[:right]
+    mask
+  end
+
+  # Request a framebuffer update. The response will be sent asynchronously by the server.
+  # @param [TrueClass,FalseClass] incremental
+  # @return [nil]
+  def request_framebuffer_update(incremental: true)
+    logger.info("sending frame buffer update request incremental=#{incremental}")
     request = FramebufferUpdateRequest.new(
-      incremental: 0,
+      incremental: incremental ? 0 : 1,
       x_position: 0,
       y_position: 0,
-      width: server_init.framebuffer_width,
-      height: server_init.framebuffer_height
+      width: state.width,
+      height: state.height
     )
     socket.write(request.to_binary_s)
 
     nil
   end
 
+  # Attempts to poll for available framebuffer updates if they are available
+  #
+  # @return [TrueClass,FalseClass] True if there was a framebuffer update, false otherwise
+  def poll_framebuffer_update
+    ready_reads, _ready_writes, _ready_errors = IO.select([@socket], nil, nil, 0)
+    return false unless ready_reads
+
+    update_response = FramebufferUpdate.read(
+      socket,
+      client_state: state
+    )
+    decode_framebuffer_update(update_response)
+    true
+  end
+
   # Requests a framebuffer update, and blocks synchronously until the framebuffer can be updated.
-  # The result is then saved to file path
+  # The result is then saved to the given file path
+  # @param [TrueClass, FalseClass] refresh When true the current framebuffer is refreshed from the remote server
   # @param [String] path the result path
-  def screenshot(path:)
-    request_framebuffer_update
+  def screenshot(path:, refresh: true)
+    request_framebuffer_update(incremental: false) if refresh
 
     # Note there may be an indefinite period of time before receiving the response
     logger.info('waiting for server frame buffer update')
 
-    response = FramebufferUpdate.read(
+    update_response = FramebufferUpdate.read(
       socket,
-      config: {
-        framebuffer_width: server_init.framebuffer_width,
-        framebuffer_height: server_init.framebuffer_height,
-        bits_per_pixel: server_init.pixel_format.bits_per_pixel
-      }
+      client_state: state
     )
 
-    logger.info("received frame buffer update response #{response}")
-
-    state = ClientState.new(
-      bits_per_pixel: server_init.pixel_format.bits_per_pixel,
-      width: server_init.framebuffer_width,
-      height: server_init.framebuffer_height
-    )
-
-    framebuffer = Array.new(server_init.framebuffer_width * server_init.framebuffer_height, 0)
-    response.rectangles.each_with_index do |rectangle, _index|
-      encoding_type = rectangle.body.selection
-      decoder = decoders[encoding_type]
-
-      if decoder
-        decoder.decode(state, rectangle, framebuffer)
-      else
-        logger.error("unsupported encoding type #{encoding_type}")
-      end
-    end
+    logger.info("received frame buffer update response #{update_response}")
+    decode_framebuffer_update(update_response)
 
     logger.info("saving to path #{path}")
     image = ChunkyPNG::Image.new(
       state.width,
       state.height,
-      framebuffer
+      state.framebuffer
     )
 
     image.save(path, interlace: false)
@@ -728,12 +813,7 @@ class RubyVnc::Client
   #   @return [RubyVnc::Client::SecurityHandshake]
   attr_accessor :handshake
 
-  # The ServerInit response generated by the server
-  # @!attribute [rw] handshake
-  #   @return [RubyVnc::Client::ServerInit]
-  attr_accessor :server_init
-
-  # The list of encodings generated by the client too the server
+  # The list of encodings generated by the client to the server
   # @!attribute [rw] encodings
   #   @return [Array<Number>]
   #   @see [RubyVnc::Client::EncodingType]
@@ -771,5 +851,20 @@ class RubyVnc::Client
     end
 
     RubyVnc::SynchronousReaderWriter.new(socket)
+  end
+
+  # @param [RubyVnc::Client::FramebufferUpdate] update
+  def decode_framebuffer_update(update)
+    logger.info("Decoding rectangles #{update.rectangles.length}")
+    update.rectangles.each do |rectangle|
+      encoding_type = rectangle.body.selection
+      decoder = decoders[encoding_type]
+
+      if decoder
+        decoder.decode(state, rectangle, state.framebuffer)
+      else
+        logger.error("unsupported encoding type #{encoding_type}")
+      end
+    end
   end
 end

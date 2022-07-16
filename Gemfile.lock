@@ -4,6 +4,7 @@ PATH
     ruby_vnc (0.1.0)
       bindata
       chunky_png
+      ruby2d
       zeitwerk
 
 GEM
@@ -35,8 +36,9 @@ GEM
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.11.0)
     rspec-support (3.11.0)
+    ruby2d (0.11.3)
     tcr (0.2.2)
-    zeitwerk (2.5.3)
+    zeitwerk (2.6.0)
 
 PLATFORMS
   ruby

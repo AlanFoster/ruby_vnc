@@ -9,7 +9,8 @@ options = {
   verbose: true,
   password: nil,
   encodings: RubyVnc::Client::DEFAULT_ENCODINGS,
-  screenshot_path: nil
+  screenshot_path: nil,
+  gui: false
 }
 options_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} [options]"
@@ -48,6 +49,10 @@ options_parser = OptionParser.new do |opts|
   opts.on('--screenshot path', 'Screenshot target path') do |screenshot_path|
     options[:screenshot_path] = screenshot_path
   end
+
+  opts.on('--gui', 'Open a GUI window') do |gui|
+    options[:gui] = true
+  end
 end
 options_parser.parse!
 
@@ -57,10 +62,11 @@ if options[:host].nil?
   exit 1
 end
 
+logger = options[:verbose] ? Logger.new($stdout) : Logger.new(nil)
 client = RubyVnc::Client.new(
   host: options[:host],
   port: options[:port],
-  logger: options[:verbose] ? Logger.new($stdout) : Logger.new(nil),
+  logger: logger,
   encodings: options[:encodings]
 )
 client.negotiate
@@ -74,5 +80,12 @@ unless authenticated
 end
 
 client.init
-client.request_framebuffer_update
-client.screenshot(path: options[:screenshot_path]) if options[:screenshot_path]
+
+if options[:screenshot_path]
+  client.screenshot(path: options[:screenshot_path])
+end
+
+if options[:gui]
+  window = RubyVnc::Gui::Window.new(client: client, logger: logger)
+  window.run
+end

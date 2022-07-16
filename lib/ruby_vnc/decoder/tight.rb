@@ -20,8 +20,7 @@ class RubyVnc::Decoder::Tight
 
   # A primitive representing the length of the Tight pixel data.
   # There is a maximum of 3 bytes available for the length. The data is
-  # a little end
-  # ian stream of 7 bit bytes representing the
+  # a little endian stream of 7 bit bytes representing the
   # positive form of the integer. The upper bit of each byte
   # is set when there are more bytes in the stream.
   #
@@ -81,6 +80,9 @@ class RubyVnc::Decoder::Tight
   class TightCompressionBasicCompressionPaletteFilter < BinData::Record
     endian :big
 
+    # Stop pixels from being logged out to stop cluttering the screen
+    hide :pixels
+
     # The palette begins with an unsigned byte which value is the number of colors
     # in the palette minus 1 (i.e. 1 means 2 colors, 255 means 256 colors in the palette)
     uint8 :number_of_colors_in_palette
@@ -103,6 +105,7 @@ class RubyVnc::Decoder::Tight
 
     search_prefix :tight_compression_basic_compression
 
+    # Stop pixels from being logged out to stop cluttering the screen
     hide :pixels
 
     # Two bits dedicated to which stream to use
@@ -245,7 +248,7 @@ class RubyVnc::Decoder::Tight
           # alpha
           0xff
 
-      framebuffer_width = server_init.framebuffer_width
+      framebuffer_width = state.width
 
       y_pixel_range = (rectangle.y_position...rectangle.y_position + rectangle.height)
       x_pixel_range = (rectangle.x_position...rectangle.x_position + rectangle.width)
