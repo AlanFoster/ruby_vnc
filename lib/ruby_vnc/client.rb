@@ -331,7 +331,7 @@ class RubyVnc::Client
     pixel_format :pixel_format
   end
 
-  # Sent by the client to set on the server the supported encoding types
+  # Sent by the client to s et on the server the supported encoding types
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.2
   class SetEncodingsRequest < BinData::Record
     endian :big
@@ -392,9 +392,6 @@ class RubyVnc::Client
   class FramebufferUpdateRectangleRaw < BinData::Record
     endian :big
 
-    # Stop pixels from being logged out to stop cluttering the screen
-    hide :pixels
-
     # The raw pixel update
     # @!attribute [r] pixels
     #   @return [String]
@@ -405,9 +402,6 @@ class RubyVnc::Client
   # https://github.com/rfbproto/rfbproto/blob/de8c2c73d85f7659af7dc750c34ccdadaa8b876b/rfbproto.rst#766zlib-encoding
   class FramebufferUpdateRectangleZlib < BinData::Record
     endian :big
-
-    # Stop pixels from being logged out to stop cluttering the screen
-    hide :pixels
 
     # @!attribute [r] length
     #   @return [Integer]
@@ -453,7 +447,9 @@ class RubyVnc::Client
       framebuffer_update_rectangle_zlib EncodingType::ZLIB
 
       framebuffer_update_rectangle_tight EncodingType::TIGHT,
-                                         require: RubyVnc::Decoder::Tight
+                                         require: RubyVnc::Decoder::Tight,
+                                         width: -> { width },
+                                         height: -> { height }
     end
   end
 
@@ -729,7 +725,7 @@ class RubyVnc::Client
   def request_framebuffer_update(incremental: true)
     logger.info("sending frame buffer update request incremental=#{incremental}")
     request = FramebufferUpdateRequest.new(
-      incremental: incremental ? 0 : 1,
+      incremental: incremental ? 1 : 0,
       x_position: 0,
       y_position: 0,
       width: state.width,
@@ -747,10 +743,13 @@ class RubyVnc::Client
     ready_reads, _ready_writes, _ready_errors = IO.select([@socket], nil, nil, 0)
     return false unless ready_reads
 
+    update_response = nil
+    BinData.trace_reading do
     update_response = FramebufferUpdate.read(
       socket,
       client_state: state
     )
+    end
     decode_framebuffer_update(update_response)
     true
   end

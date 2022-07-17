@@ -3,6 +3,10 @@
 autoload :Zlib, 'zlib'
 
 class RubyVnc::Decoder::Tight
+  # If the byte size is less than this value after the filter has been applied, then
+  # No compression is used, and instead the raw data is sent
+  MAXIMUM_BYTES_BEFORE_COMPRESSION = 12
+
   module TightCompressionType
     BASIC_COMPRESSION      = 0
     JPEG_COMPRESSION       = 1
@@ -62,26 +66,26 @@ class RubyVnc::Decoder::Tight
   class TightCompressionBasicCompressionCopyFilter < BinData::Record
     endian :big
 
-    # Stop pixels from being logged out to stop cluttering the screen
-    hide :pixels
-
     # @!attribute [r] length
     #   @return [Integer]
-    tight_pixel_length :pixels_length
+    tight_pixel_length :pixels_length,
+                       onlyif: -> { uncompressed_size >= MAXIMUM_BYTES_BEFORE_COMPRESSION }
 
     # The raw pixel update
     # @!attribute [r] pixels
     #   @return [String]
-    string :pixels, read_length: -> { pixels_length }
+    string :pixels, read_length: -> { uncompressed_size < MAXIMUM_BYTES_BEFORE_COMPRESSION ? uncompressed_size : pixels_length }
+
+    def uncompressed_size
+      bits_per_pixel = 24
+      (eval_parameter(:width) * bits_per_pixel + 7) / 8 * eval_parameter(:height)
+    end
   end
 
   # The Palette Filter first sends palette data, followed by
   # the image data length and image data
   class TightCompressionBasicCompressionPaletteFilter < BinData::Record
     endian :big
-
-    # Stop pixels from being logged out to stop cluttering the screen
-    hide :pixels
 
     # The palette begins with an unsigned byte which value is the number of colors
     # in the palette minus 1 (i.e. 1 means 2 colors, 255 means 256 colors in the palette)
@@ -92,21 +96,26 @@ class RubyVnc::Decoder::Tight
 
     # @!attribute [r] length
     #   @return [Integer]
-    tight_pixel_length :pixels_length
+    tight_pixel_length :pixels_length,
+                       onlyif: -> { uncompressed_size >= MAXIMUM_BYTES_BEFORE_COMPRESSION }
 
     # The raw pixel update
     # @!attribute [r] pixels
     #   @return [String]
-    string :pixels, read_length: -> { pixels_length }
+    string :pixels, read_length: -> { uncompressed_size < MAXIMUM_BYTES_BEFORE_COMPRESSION ? uncompressed_size : pixels_length }
+
+    def uncompressed_size
+      # If the palette size is 2, then each pixel is encoded in 1 bit
+      bits_per_pixel = number_of_colors_in_palette <= 2 ? 1 : 8
+
+      (eval_parameter(:width) * bits_per_pixel + 7) / 8 * eval_parameter(:height)
+    end
   end
 
   class TightCompressionBasicCompression < BinData::Record
     endian :big
 
     search_prefix :tight_compression_basic_compression
-
-    # Stop pixels from being logged out to stop cluttering the screen
-    hide :pixels
 
     # Two bits dedicated to which stream to use
     # 00 - Use stream 0
@@ -120,11 +129,15 @@ class RubyVnc::Decoder::Tight
     virtual :basic_compression_flag, value: -> { (compression_flag & 0b0001) >> 0 }
 
     # Used when #read_filter_id is set to 1, otherwise it should be 0
-    uint8 :filter_id, onlyif: -> { (compression_flag & 0b0010) >> 1 != 0 }
+    uint8 :filter_id, onlyif: -> { (compression_flag & 0b0100) >> 1 != 0 }
 
     choice :filter_value, selection: -> { filter_id } do
-      copy_filter BasicCompressionFilterType::COPY_FILTER
-      palette_filter BasicCompressionFilterType::PALETTE_FILTER
+      copy_filter BasicCompressionFilterType::COPY_FILTER,
+                  width: -> { width },
+                  height: -> { height }
+      palette_filter BasicCompressionFilterType::PALETTE_FILTER,
+                     width: -> { width },
+                     height: -> { height }
     end
   end
 

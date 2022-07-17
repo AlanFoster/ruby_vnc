@@ -18,6 +18,11 @@ class RubyVnc::Framebuffer
   # @param [Integer] height
   # @param [Array<Array<Integer>>] pixels An array of array of pixels in 8-bit RGB format for example [[255, 0, 255]]
   def update_pixels(x, y, width, height, pixels)
+    unless pixels.any?
+      $stderr.puts "pixels are empty for some reason"
+      puts caller
+    end
+
     pixels = pixels.map { |r, g, b| Magick::Pixel.new(r * 255, g * 255, b * 255, 255) }
     @image.store_pixels(x, y, width, height, pixels)
   end
