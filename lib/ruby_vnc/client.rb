@@ -281,6 +281,66 @@ class RubyVnc::Client
     string :name_string, read_length: -> { name_length }
   end
 
+  module KeyboardKey
+    BACKSPACE           = 0xff08
+    TAB                 = 0xff09
+    RETURN              = 0xff0d
+    ESCAPE              = 0xff1b
+    INSERT              = 0xff63
+    DELETE              = 0xffff
+    HOME                = 0xff50
+    END_KEY             = 0xff57
+    PAGE_UP             = 0xff55
+    PAGE_DOWN           = 0xff56
+    LEFT                = 0xff51
+    UP                  = 0xff52
+    RIGHT               = 0xff53
+    DOWN                = 0xff54
+    F1                  = 0xffbe
+    F2                  = 0xffbf
+    F3                  = 0xffc0
+    F4                  = 0xffc1
+    F5                  = 0xffc2
+    F6                  = 0xffc3
+    F7                  = 0xffc4
+    F8                  = 0xffc5
+    F9                  = 0xffc6
+    F10                 = 0xffc7
+    F11                 = 0xffc8
+    F12                 = 0xffc9
+    SHIFT_LEFT          = 0xffe1
+    SHIFT_RIGHT         = 0xffe2
+    CONTROL_LEFT        = 0xffe3
+    CONTROL_RIGHT       = 0xffe4
+    META_LEFT           = 0xffe7
+    META_RIGHT          = 0xffe8
+    ALT_LEFT            = 0xffe9
+    ALT_RIGHT           = 0xffea
+  end
+
+  # Sent by the client when there is a keyboard event
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.4
+  class KeyboardEventRequest < BinData::Record
+    endian :big
+
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type, initial_value: ClientMessageType::KEY_EVENT
+
+    # @!attribute [r] :down_flag
+    #   @return [Integer]
+    uint8 :down_flag
+
+    # @!attribute [r] padding
+    #   @return [Integer]
+    uint16 :padding
+
+    # @!attribute [r] key
+    #   @return [Integer]
+    #   @see [RubyVnc::Client::KeyboardKey]
+    uint32 :key_value
+  end
+
   # the button mask index used as part of a pointer event
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.5.5
   module ButtonMask
@@ -679,6 +739,28 @@ class RubyVnc::Client
     nil
   end
 
+  # @param [Integer] key_value
+  def key_down(key_value)
+    socket.write(
+      KeyboardEventRequest.new(
+        down_flag: 1,
+        key_value: key_value
+      ).to_binary_s
+    )
+    nil
+  end
+
+  # @param [Integer] key_valuekey
+  def key_up(key_value)
+    socket.write(
+      KeyboardEventRequest.new(
+        down_flag: 0,
+        key_value: key_value
+      ).to_binary_s
+    )
+    nil
+  end
+
   # @param [Integer] x
   # @param [Integer] y
   # @return [nil]
@@ -743,13 +825,10 @@ class RubyVnc::Client
     ready_reads, _ready_writes, _ready_errors = IO.select([@socket], nil, nil, 0)
     return false unless ready_reads
 
-    update_response = nil
-    BinData.trace_reading do
     update_response = FramebufferUpdate.read(
       socket,
       client_state: state
     )
-    end
     decode_framebuffer_update(update_response)
     true
   end

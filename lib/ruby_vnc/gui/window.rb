@@ -44,6 +44,9 @@ class RubyVnc::Gui::Window
   end
 
   def run
+    keyboard_state = {
+      has_shift_down: false
+    }
     pointer_state = {
       left: false,
       middle: false,
@@ -55,7 +58,36 @@ class RubyVnc::Gui::Window
     last_update_request = nil
 
     window.on :key_down do |event|
-      window.close if event[:type] == :down && event[:key] == 'escape'
+      window.close if event.key == 'escape'
+
+      keyboard_state[:has_shift_down] = true if event.key == 'left shift' || event.key == 'right shift'
+
+      key_value = vnc_key_for(keyboard_state, event.key)
+      unless key_value
+        logger.info("Unknown key #{event.key}")
+        next
+      end
+
+      client.key_down(key_value)
+      update_requested = true
+    end
+
+    window.on :key_held do |event|
+      key_value = vnc_key_for(keyboard_state, event.key)
+      next unless key_value
+
+      client.key_down(key_value)
+      update_requested = true
+    end
+
+    window.on :key_up do |event|
+      keyboard_state[:has_shift_down] = false if event.key == 'left shift' || event.key == 'right shift'
+
+      key_value = vnc_key_for(keyboard_state, event.key)
+      next unless key_value
+
+      client.key_up(key_value)
+      update_requested = true
     end
 
     window.on :mouse_down do |event|
@@ -129,4 +161,80 @@ class RubyVnc::Gui::Window
   # @!attribute [r] logger
   #   @return [Logger]
   attr_reader :logger
+
+  # @param [string] ruby2d_key Ruby2D's key value
+  # @return [Integer, nil] The matching vnc scan code
+  def vnc_key_for(keyboard_state, ruby2d_key)
+
+    logger.info("key: #{ruby2d_key}")
+
+    # Mapping of Ruby2D's keys to RubyVnc's keys
+    key_mapping = {
+      'backspace' => RubyVnc::Client::KeyboardKey::BACKSPACE,
+      'tab' => RubyVnc::Client::KeyboardKey::TAB,
+      'return' => RubyVnc::Client::KeyboardKey::RETURN,
+      'escape' => RubyVnc::Client::KeyboardKey::ESCAPE,
+      'insert' => RubyVnc::Client::KeyboardKey::INSERT,
+      'delete' => RubyVnc::Client::KeyboardKey::DELETE,
+      'home' => RubyVnc::Client::KeyboardKey::HOME,
+      'end' => RubyVnc::Client::KeyboardKey::END_KEY,
+      'pageup' => RubyVnc::Client::KeyboardKey::PAGE_UP,
+      'pagedown' => RubyVnc::Client::KeyboardKey::PAGE_DOWN,
+      'left' => RubyVnc::Client::KeyboardKey::LEFT,
+      'up' => RubyVnc::Client::KeyboardKey::UP,
+      'right' => RubyVnc::Client::KeyboardKey::RIGHT,
+      'down' => RubyVnc::Client::KeyboardKey::DOWN,
+      'f1' => RubyVnc::Client::KeyboardKey::F1,
+      'f2' => RubyVnc::Client::KeyboardKey::F2,
+      'f3' => RubyVnc::Client::KeyboardKey::F3,
+      'f4' => RubyVnc::Client::KeyboardKey::F4,
+      'f5' => RubyVnc::Client::KeyboardKey::F5,
+      'f6' => RubyVnc::Client::KeyboardKey::F6,
+      'f7' => RubyVnc::Client::KeyboardKey::F7,
+      'f8' => RubyVnc::Client::KeyboardKey::F8,
+      'f9' => RubyVnc::Client::KeyboardKey::F9,
+      'f10' => RubyVnc::Client::KeyboardKey::F10,
+      'f11' => RubyVnc::Client::KeyboardKey::F11,
+      'f12' => RubyVnc::Client::KeyboardKey::F12,
+      'left shift' => RubyVnc::Client::KeyboardKey::SHIFT_LEFT,
+      'right shift' => RubyVnc::Client::KeyboardKey::SHIFT_RIGHT,
+      'left ctrl' => RubyVnc::Client::KeyboardKey::CONTROL_LEFT,
+      'right ctrl' => RubyVnc::Client::KeyboardKey::CONTROL_RIGHT,
+      'left gui' => RubyVnc::Client::KeyboardKey::META_LEFT,
+      'right gui' => RubyVnc::Client::KeyboardKey::META_RIGHT,
+      'left alt' => RubyVnc::Client::KeyboardKey::ALT_LEFT,
+      'right alt' => RubyVnc::Client::KeyboardKey::ALT_RIGHT,
+
+      'space' => ' '.ord
+    }
+
+    # Lookups for when the shift key is pressed
+    shift_mappings = {
+      '1' => '!',
+      '2' => '@',
+      '3' => '£',
+      '4' => '$',
+      '5' => '%',
+      '6' => 'x',
+      '7' => 'x',
+      '8' => 'x',
+      '9' => 'x',
+      '0' => 'x',
+      '-' => '_',
+      '=' => '+'
+    }
+
+    # Perform an initial lookup of the string key to RubyVnc keys
+    result = key_mapping[ruby2d_key]
+    return result if result
+
+    # Check a-z,A-Z,0-9
+    if ruby2d_key.match(/\A[a-zA-Z0-9]\Z/)
+      new_key = keyboard_state[:has_shift_down] ? shift_mappings.fetch(ruby2d_key, ruby2d_key) : ruby2d_key
+      $stderr.puts "new key: #{new_key} keyboard state #{keyboard_state}"
+      return new_key.ord
+    end
+
+    nil
+  end
 end
