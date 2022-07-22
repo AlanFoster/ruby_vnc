@@ -6,7 +6,7 @@ Prototype for consuming parts of the VNC Protocol.
 - [Improved community maintained RFB specification](https://github.com/rfbproto/rfbproto)
 
 Handles negotiation, authentication (None and VNC), setting frame pixel format, requesting screen buffer updates,
-saving a screenshot to file.
+saving a screenshot to file, and GUI support.
 
 Supported encodings:
 - Raw
@@ -56,6 +56,12 @@ Open a interactive GUI:
 
 ```
 bundle exec ruby ./examples/example.rb --host 127.0.0.1 --port 5902 --password password123 --gui
+```
+
+Specify log level, logging all messages:
+
+```
+bundle exec ruby ./examples/example.rb --host  172.16.83.2 --port 5902 --password password123 --gui --log-level 0
 ```
 
 ## Targets

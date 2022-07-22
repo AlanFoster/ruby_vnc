@@ -10,7 +10,8 @@ options = {
   password: nil,
   encodings: RubyVnc::Client::DEFAULT_ENCODINGS,
   screenshot_path: nil,
-  gui: false
+  gui: false,
+  log_level: Logger::Severity::INFO
 }
 options_parser = OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename(__FILE__)} [options]"
@@ -53,6 +54,10 @@ options_parser = OptionParser.new do |opts|
   opts.on('--gui', 'Open a GUI window') do |gui|
     options[:gui] = true
   end
+
+  opts.on('--log-level log_level', Integer, 'Log level') do |log_level|
+    options[:log_level] = log_level
+  end
 end
 options_parser.parse!
 
@@ -63,6 +68,7 @@ if options[:host].nil?
 end
 
 logger = options[:verbose] ? Logger.new($stdout) : Logger.new(nil)
+logger.level = options[:log_level]
 client = RubyVnc::Client.new(
   host: options[:host],
   port: options[:port],

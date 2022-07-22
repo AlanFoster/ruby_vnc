@@ -232,9 +232,9 @@ class RubyVnc::Decoder::Tight
           pixels
         )
       when BasicCompressionFilterType::PALETTE_FILTER
-        logger.info("unhandled filter type palette")
+        logger.error('unhandled filter type palette')
       else
-        logger.info("Unhandled filter type #{filter_id}")
+        logger.error("Unhandled filter type #{filter_id}")
       end
 
       # Apply a single color to a full rectangle

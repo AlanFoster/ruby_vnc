@@ -855,7 +855,7 @@ class RubyVnc::Client
   # @param [TrueClass,FalseClass] incremental
   # @return [nil]
   def request_framebuffer_update(incremental: true)
-    logger.info("sending frame buffer update request incremental=#{incremental}")
+    logger.debug("sending frame buffer update request incremental=#{incremental}")
     request = FramebufferUpdateRequest.new(
       incremental: incremental ? 1 : 0,
       x_position: 0,
@@ -910,10 +910,10 @@ class RubyVnc::Client
       client_state: state
     )
 
-    logger.info("received frame buffer update response #{update_response}")
+    logger.debug("received frame buffer update response #{update_response}")
     decode_framebuffer_update(update_response)
 
-    logger.info("saving to path #{path}")
+    logger.debug("saving to path #{path}")
     state.framebuffer.save(path)
 
     path
@@ -988,7 +988,7 @@ class RubyVnc::Client
 
   # @param [RubyVnc::Client::FramebufferUpdate] update
   def decode_framebuffer_update(update)
-    logger.info("Decoding rectangles #{update.rectangles.length}")
+    logger.debug("Decoding rectangles #{update.rectangles.length}")
     update.rectangles.each do |rectangle|
       encoding_type = rectangle.body.selection
       decoder = decoders[encoding_type]

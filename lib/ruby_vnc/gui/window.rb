@@ -133,7 +133,7 @@ class RubyVnc::Gui::Window
       # Write the framebuffer to disk for now as Ruby2D doesn't expose setting a raw buffer
       case update_event.type
       when :framebuffer_update
-        logger.info('Saving to disk to update GUI')
+        logger.debug('Saving to disk to update GUI')
         client.state.framebuffer.save(@filesystem_framebuffer_path)
         window.remove(previous_image) if previous_image
 
@@ -168,8 +168,7 @@ class RubyVnc::Gui::Window
   # @param [string] ruby2d_key Ruby2D's key value
   # @return [Integer, nil] The matching vnc scan code
   def vnc_key_for(keyboard_state, ruby2d_key)
-
-    logger.info("key: #{ruby2d_key}")
+    logger.debug("key: #{ruby2d_key}")
 
     # Mapping of Ruby2D's keys to RubyVnc's keys
     key_mapping = {
