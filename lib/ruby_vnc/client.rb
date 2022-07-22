@@ -869,12 +869,17 @@ class RubyVnc::Client
   end
 
   # Attempts to poll for available framebuffer updates if they are available
-  #
-  # @return [TrueClass,nil]  if there was an update, otherwise nil
+  # @return [ClientUpdateEvent,nil] if there was an update, otherwise nil
   def poll_update
     ready_reads, _ready_writes, _ready_errors = IO.select([@socket], nil, nil, 0)
     return nil unless ready_reads
 
+    read_update
+  end
+
+  # Blocks synchronously on reading the next update available from the server
+  # @return [ClientUpdateEvent]
+  def read_update
     update_response = ServerUpdate.read(
       socket,
       client_state: state
@@ -892,6 +897,13 @@ class RubyVnc::Client
           text: update_response.body.text
         }
       )
+    else
+      ClientUpdateEvent.new(
+        type: :unknown,
+        body: {
+          message_type: update_response.message_type
+        }
+      )
     end
   end
 
@@ -905,13 +917,10 @@ class RubyVnc::Client
     # Note there may be an indefinite period of time before receiving the response
     logger.info('waiting for server frame buffer update')
 
-    update_response = FramebufferUpdate.read(
-      socket,
-      client_state: state
-    )
-
-    logger.debug("received frame buffer update response #{update_response}")
-    decode_framebuffer_update(update_response)
+    loop do
+      event = read_update
+      break if event.type == :framebuffer_update
+    end
 
     logger.debug("saving to path #{path}")
     state.framebuffer.save(path)
