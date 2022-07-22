@@ -513,15 +513,12 @@ class RubyVnc::Client
     end
   end
 
+
   # Sent by the client to request an update to the framebuffer within a
   # specific region
   # https://datatracker.ietf.org/doc/html/rfc6143#section-7.6.1
   class FramebufferUpdate < BinData::Record
     endian :big
-
-    # @!attribute [r] message_type
-    #   @return [Integer]
-    uint8 :message_type, initial_value: ServerMessageType::FRAMEBUFFER_UPDATE
 
     # @!attribute [r] padding
     #   @return [Integer]
@@ -534,6 +531,59 @@ class RubyVnc::Client
     # @!attribute [r] rectangles
     #   @return [Array<RubyVnc::Client::FramebufferRectangleUpdate>]
     array :rectangles, type: :framebuffer_update_rectangle, initial_length: -> { number_of_rectangles }
+  end
+
+  # Sent by the server when there is available cut text
+  # https://datatracker.ietf.org/doc/html/rfc6143#section-7.6.4
+  class ServerCutText < BinData::Record
+    endian :big
+
+    # @!attribute [r] padding
+    #   @return [Integer]
+    uint24 :padding
+
+    # @!attribute [r] text_length
+    #   @return [Integer]
+    uint32 :text_length
+
+    # The new ISO 8859-1 (Latin-1) text in its cut buffer. Ends of lines are represented by
+    # the linefeed / newline character (value 10) alone. No carriage-return (value 13) is needed.
+    #
+    # @!attribute [r] pixels
+    #   @return [String]
+    string :text, read_length: -> { text_length }
+  end
+
+  # Wrapper class for server responses
+  class ServerUpdate < BinData::Record
+    # @!attribute [r] message_type
+    #   @return [Integer]
+    uint8 :message_type
+
+    choice :body, selection: :message_type do
+      framebuffer_update ServerMessageType::FRAMEBUFFER_UPDATE,
+                         client_state: -> { client_state }
+
+      server_cut_text ServerMessageType::SERVER_CUT_TEXT
+    end
+  end
+
+  # A client update event
+  class ClientUpdateEvent
+    # the event type
+    # @!attribute [r] type
+    #   @return [symbol]
+    attr_reader :type
+
+    # the event body
+    # @!attribute [r] body
+    #   @return [Hash]
+    attr_reader :body
+
+    def initialize(type:, body: nil)
+      @type = type
+      @body = body
+    end
   end
 
   class ClientState
@@ -820,17 +870,29 @@ class RubyVnc::Client
 
   # Attempts to poll for available framebuffer updates if they are available
   #
-  # @return [TrueClass,FalseClass] True if there was a framebuffer update, false otherwise
-  def poll_framebuffer_update
+  # @return [TrueClass,nil]  if there was an update, otherwise nil
+  def poll_update
     ready_reads, _ready_writes, _ready_errors = IO.select([@socket], nil, nil, 0)
-    return false unless ready_reads
+    return nil unless ready_reads
 
-    update_response = FramebufferUpdate.read(
+    update_response = ServerUpdate.read(
       socket,
       client_state: state
     )
-    decode_framebuffer_update(update_response)
-    true
+
+    case update_response.message_type
+    when ServerMessageType::FRAMEBUFFER_UPDATE
+      decode_framebuffer_update(update_response.body)
+
+      ClientUpdateEvent.new(type: :framebuffer_update)
+    when ServerMessageType::SERVER_CUT_TEXT
+      ClientUpdateEvent.new(
+        type: :server_cut_text,
+        body: {
+          text: update_response.body.text
+        }
+      )
+    end
   end
 
   # Requests a framebuffer update, and blocks synchronously until the framebuffer can be updated.

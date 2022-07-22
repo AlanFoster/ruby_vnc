@@ -115,9 +115,9 @@ class RubyVnc::Gui::Window
         # Are we the first request?
         last_update_request.nil? ||
           # Has a certain amount of time passed since the last request?
-          (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request > 1000) ||
+          (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request > 200) ||
           # Has an update been requested by an event handler? Event handler requests can still be throttled, i.e. for mouse moves
-          (update_requested && (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request) > 500)
+          (update_requested && (Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - last_update_request) > 10)
       )
 
       if requires_framebuffer_update_request
@@ -127,11 +127,12 @@ class RubyVnc::Gui::Window
 
         update_requested = false
       end
-      has_updated = false
-      5.times { has_updated |= client.poll_framebuffer_update }
+      update_event = client.poll_update
+      next unless update_event
 
       # Write the framebuffer to disk for now as Ruby2D doesn't expose setting a raw buffer
-      if has_updated
+      case update_event.type
+      when :framebuffer_update
         logger.info('Saving to disk to update GUI')
         client.state.framebuffer.save(@filesystem_framebuffer_path)
         window.remove(previous_image) if previous_image
@@ -140,6 +141,8 @@ class RubyVnc::Gui::Window
         image.z = 1
         window.add(image)
         previous_image = image
+      when :server_cut_text
+        logger.info("server cut text response: #{update_event.body[:text]}")
       end
     end
 
@@ -228,10 +231,9 @@ class RubyVnc::Gui::Window
     result = key_mapping[ruby2d_key]
     return result if result
 
-    # Check a-z,A-Z,0-9
-    if ruby2d_key.match(/\A[a-zA-Z0-9]\Z/)
+    # Check common characters
+    if ruby2d_key.match(/\A[a-zA-Z0-9.,]\Z/)
       new_key = keyboard_state[:has_shift_down] ? shift_mappings.fetch(ruby2d_key, ruby2d_key) : ruby2d_key
-      $stderr.puts "new key: #{new_key} keyboard state #{keyboard_state}"
       return new_key.ord
     end
 
