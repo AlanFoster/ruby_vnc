@@ -1,6 +1,7 @@
-require 'bundler/setup'
 require 'ruby_vnc'
+require 'bundler/setup'
 require_relative './lib/mock_socket'
+require_relative './support/matchers/equal_image'
 
 RSPEC_ROOT = File.dirname(__FILE__)
 FIXTURES_ROOT = File.join(RSPEC_ROOT, 'fixtures')

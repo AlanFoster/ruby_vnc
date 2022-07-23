@@ -10,15 +10,19 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
 
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ruby:
           - 2.7
           - 3.0
+          - 3.0
+          - 3.1
+        os:
+          - ubuntu-18.04
         test_cmd:
           - bundle exec rspec
 
@@ -28,6 +32,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+              imagemagick \
+              libmagickwand-dev \
               libsdl2-dev \
               libsdl2-image-dev \
               libsdl2-mixer-dev \

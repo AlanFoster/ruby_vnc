@@ -15,6 +15,18 @@ Supported encodings:
 
 ## Installation
 
+Install the native dependencies:
+
+```
+sudo apt-get update
+sudo apt-get install -y \
+  libmagickwand-dev \
+  libsdl2-dev \
+  libsdl2-image-dev \
+  libsdl2-mixer-dev \
+  libsdl2-ttf-dev
+```
+
 Add this line to your application's Gemfile:
 
 ```ruby

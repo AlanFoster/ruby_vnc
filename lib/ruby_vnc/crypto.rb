@@ -19,6 +19,7 @@ module RubyVnc::Crypto
     result = ''.b
     2.times do |i|
       cipher.reset
+      cipher.iv = "\x00".b * 8
       result << cipher.update(challenge[i * 8, 8])
     end
 
