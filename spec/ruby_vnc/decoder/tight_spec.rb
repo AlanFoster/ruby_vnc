@@ -100,7 +100,7 @@ RSpec.describe RubyVnc::Decoder::Tight do
               read_filter_id: 1,
               filter_id: 1,
               filter_value: {
-                number_of_colors_in_palette: 1,
+                number_of_colors_in_palette: 2,
                 palette_data: "\x1b\x6a\xcb\xce\xce\xce".b,
                 pixels: "\x03\x80\x03\x80\x03\x80\x03\x80\x03\x80".b
               }
@@ -138,7 +138,7 @@ RSpec.describe RubyVnc::Decoder::Tight do
               read_filter_id: 1,
               filter_id: 1,
               filter_value: {
-                number_of_colors_in_palette: 2,
+                number_of_colors_in_palette: 3,
                 palette_data: "\x0c\x0c\x0c\xcc\xb1\x76\x34\x0d\x0d".b,
                 pixels_length: 14,
                 pixels: "\x42\xdf\xef\x0e\x2e\xb6\x49\x00\x00\x00\x00\x00\xff\xff".b
@@ -177,7 +177,7 @@ RSpec.describe RubyVnc::Decoder::Tight do
               read_filter_id: 1,
               filter_id: 1,
               filter_value: {
-                number_of_colors_in_palette: 1,
+                number_of_colors_in_palette: 2,
                 palette_data: "\x00\x00\x00\xFF\xFF\xFF".b,
                 pixels_length: 8,
                 pixels: "\xC2\x00\x00\x00\x00\x00\xFF\xFF".b

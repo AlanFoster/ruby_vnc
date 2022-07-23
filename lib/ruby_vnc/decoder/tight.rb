@@ -22,6 +22,25 @@ class RubyVnc::Decoder::Tight
     GRADIENT_FILTER = 2
   end
 
+  # The palette size is an unsigned byte. The value is the number of colors
+  # in the palette minus 1 (i.e. 1 means 2 colors, 255 means 256 colors in the palette)
+  #
+  # For improved readability when debugging, this BinData primitive reads the value and increments it
+  # by one before setting it on the BinData record
+  class TightCompressionBasicCompressionPaletteSize < BinData::BasePrimitive
+    def read_and_return_value(io)
+      read_uint8(io) + 1
+    end
+
+    def sensible_default
+      0
+    end
+
+    def read_uint8(io)
+      io.readbytes(1).unpack1('C')
+    end
+  end
+
   # A primitive representing the length of the Tight pixel data.
   # There is a maximum of 3 bytes available for the length. The data is
   # a little endian stream of 7 bit bytes representing the
@@ -57,7 +76,7 @@ class RubyVnc::Decoder::Tight
     end
 
     def read_uint8(io)
-      io.readbytes(1).unpack("C").at(0)
+      io.readbytes(1).unpack1('C')
     end
   end
 
@@ -87,12 +106,13 @@ class RubyVnc::Decoder::Tight
   class TightCompressionBasicCompressionPaletteFilter < BinData::Record
     endian :big
 
-    # The palette begins with an unsigned byte which value is the number of colors
-    # in the palette minus 1 (i.e. 1 means 2 colors, 255 means 256 colors in the palette)
-    uint8 :number_of_colors_in_palette
+    search_prefix :tight_compression_basic_compression
 
-    # In TPIXEL format
-    string :palette_data, read_length: -> { (number_of_colors_in_palette + 1) * 3 }
+    # the number of colors available in the palette
+    palette_size :number_of_colors_in_palette
+
+    # In TPIXEL format, i.e. RGB
+    string :palette_data, read_length: -> { number_of_colors_in_palette * 3 }
 
     # @!attribute [r] length
     #   @return [Integer]
@@ -106,7 +126,7 @@ class RubyVnc::Decoder::Tight
 
     def uncompressed_size
       # If the palette size is 2, then each pixel is encoded in 1 bit
-      bits_per_pixel = number_of_colors_in_palette <= 1 ? 1 : 8
+      bits_per_pixel = number_of_colors_in_palette <= 2 ? 1 : 8
 
       (eval_parameter(:width) * bits_per_pixel + 7) / 8 * eval_parameter(:height)
     end
@@ -200,8 +220,7 @@ class RubyVnc::Decoder::Tight
   # @param [RubyVnc::Client::FramebufferUpdateRectangle] rectangle the parsed rectangle object
   # @param [Array<Integer>] framebuffer The current framebuffer of size width * height
   # @return [nil] The frame buffer should be directly mutated
-  def decode(state, rectangle, framebuffer)
-    framebuffer_width = state.width
+  def decode(_state, rectangle, framebuffer)
     compression_type = rectangle.body.compression_type
 
     # Reset any of the zlib instances specified by the server
@@ -236,10 +255,9 @@ class RubyVnc::Decoder::Tight
         )
       when BasicCompressionFilterType::PALETTE_FILTER
         palette = filter.palette_data.unpack("C*").each_slice(3).to_a
-        palette_colors = filter.number_of_colors_in_palette
 
         # If the number of colors is 2, then each pixel is encoded in 1 bit,
-        if palette_colors <= 1
+        if filter.number_of_colors_in_palette <= 2
           pixels = pixel_string.unpack1('b*').chars.map { |palette_index| palette[palette_index.to_i] }
         else
           # If there are more than 2 colors, each pixel is encoded in 8 bits as a lookup of the palette
