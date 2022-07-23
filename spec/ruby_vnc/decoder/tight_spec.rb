@@ -30,7 +30,6 @@ RSpec.describe RubyVnc::Decoder::Tight do
             compression: {
               target_stream: 0,
               read_filter_id: 0,
-              basic_compression_flag: 0,
               filter_value: {
                 pixels: "\x00\x00\x00\xFF\xFF\xFF".b
               }
@@ -61,7 +60,6 @@ RSpec.describe RubyVnc::Decoder::Tight do
             compression: {
               target_stream: 0,
               read_filter_id: 0,
-              basic_compression_flag: 0,
               filter_value: {
                 pixels_length: 10,
                 pixels: "\xc2\x23\x05\xd7\x0e\x00\x00\x00\xff\xff".b
@@ -99,13 +97,51 @@ RSpec.describe RubyVnc::Decoder::Tight do
             reset_stream0: 0,
             compression: {
               target_stream: 1,
-              read_filter_id: 0,
-              basic_compression_flag: 1,
+              read_filter_id: 1,
               filter_id: 1,
               filter_value: {
                 number_of_colors_in_palette: 1,
                 palette_data: "\x1b\x6a\xcb\xce\xce\xce".b,
                 pixels: "\x03\x80\x03\x80\x03\x80\x03\x80\x03\x80".b
+              }
+            }
+          }
+          expect(described_class.read(data, width: 9, height: 5)).to eq(expected)
+        end
+      end
+
+      context 'and a length field is present with 3 palette values' do
+        it 'decodes correctly' do
+          data = (
+            # Compression stream information and encoding type
+            "\x60" +
+              # filter id - palette
+              "\x01" +
+              # number of colors in palette
+              "\x02" +
+              # palette data
+              "\x0c\x0c\x0c\xcc\xb1\x76\x34\x0d\x0d" +
+              # length
+              "\x0e" +
+              # compressed image data
+              "\x42\xdf\xef\x0e\x2e\xb6\x49\x00\x00\x00\x00\x00\xff\xff"
+          ).b
+
+          expected = {
+            compression_flag: 6,
+            reset_stream3: 0,
+            reset_stream2: 0,
+            reset_stream1: 0,
+            reset_stream0: 0,
+            compression: {
+              target_stream: 2,
+              read_filter_id: 1,
+              filter_id: 1,
+              filter_value: {
+                number_of_colors_in_palette: 2,
+                palette_data: "\x0c\x0c\x0c\xcc\xb1\x76\x34\x0d\x0d".b,
+                pixels_length: 14,
+                pixels: "\x42\xdf\xef\x0e\x2e\xb6\x49\x00\x00\x00\x00\x00\xff\xff".b
               }
             }
           }
@@ -138,8 +174,7 @@ RSpec.describe RubyVnc::Decoder::Tight do
             reset_stream0: 0,
             compression: {
               target_stream: 1,
-              read_filter_id: 0,
-              basic_compression_flag: 1,
+              read_filter_id: 1,
               filter_id: 1,
               filter_value: {
                 number_of_colors_in_palette: 1,

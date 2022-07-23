@@ -51,7 +51,7 @@ options_parser = OptionParser.new do |opts|
     options[:screenshot_path] = screenshot_path
   end
 
-  opts.on('--gui', 'Open a GUI window') do |gui|
+  opts.on('--gui', 'Open a GUI window') do
     options[:gui] = true
   end
 

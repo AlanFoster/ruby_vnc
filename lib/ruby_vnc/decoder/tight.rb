@@ -106,7 +106,7 @@ class RubyVnc::Decoder::Tight
 
     def uncompressed_size
       # If the palette size is 2, then each pixel is encoded in 1 bit
-      bits_per_pixel = number_of_colors_in_palette <= 2 ? 1 : 8
+      bits_per_pixel = number_of_colors_in_palette <= 1 ? 1 : 8
 
       (eval_parameter(:width) * bits_per_pixel + 7) / 8 * eval_parameter(:height)
     end
@@ -118,18 +118,16 @@ class RubyVnc::Decoder::Tight
     search_prefix :tight_compression_basic_compression
 
     # Two bits dedicated to which stream to use
+    #
     # 00 - Use stream 0
     # 01 - Use stream 1
     # 10 - Use stream 2
     # 11 - Use stream 3
-    virtual :target_stream, value: -> { (compression_flag & 0b1100) >> 2 }
-
-    virtual :read_filter_id, value: -> { (compression_flag & 0b0010) >> 1 }
-
-    virtual :basic_compression_flag, value: -> { (compression_flag & 0b0001) >> 0 }
+    virtual :target_stream, value: -> { (compression_flag & 0b0011) }
+    virtual :read_filter_id, value: -> { (compression_flag & 0b0100) >> 2 }
 
     # Used when #read_filter_id is set to 1, otherwise it should be 0
-    uint8 :filter_id, onlyif: -> { (compression_flag & 0b0100) >> 1 != 0 }
+    uint8 :filter_id, onlyif: -> { (compression_flag & 0b0100) >> 2 == 1 }
 
     choice :filter_value, selection: -> { filter_id } do
       copy_filter BasicCompressionFilterType::COPY_FILTER,
@@ -215,14 +213,19 @@ class RubyVnc::Decoder::Tight
     case compression_type
     when TightCompressionType::BASIC_COMPRESSION
       filter_id = rectangle.body.compression.filter_id
+      filter = rectangle.body.compression.filter_value
+
+      if filter.uncompressed_size >= MAXIMUM_BYTES_BEFORE_COMPRESSION
+        target_stream = rectangle.body.compression.target_stream
+        pixel_string = zlib_instances[target_stream].inflate(filter.pixels)
+      else
+        pixel_string = filter.pixels
+      end
+
       case filter_id
       when BasicCompressionFilterType::COPY_FILTER
-        target_stream = rectangle.body.compression.target_stream
-        pixels = rectangle.body.compression.filter_value.pixels
-        pixel_string = zlib_instances[target_stream].inflate(pixels)
-
         # convert 8 bit RGB pixels to RGB format
-        pixels = pixel_string.unpack("C*").each_slice(3)
+        pixels = pixel_string.unpack('C*').each_slice(3)
 
         framebuffer.update_pixels(
           rectangle.x_position,
@@ -232,12 +235,29 @@ class RubyVnc::Decoder::Tight
           pixels
         )
       when BasicCompressionFilterType::PALETTE_FILTER
-        logger.error('unhandled filter type palette')
+        palette = filter.palette_data.unpack("C*").each_slice(3).to_a
+        palette_colors = filter.number_of_colors_in_palette
+
+        # If the number of colors is 2, then each pixel is encoded in 1 bit,
+        if palette_colors <= 1
+          pixels = pixel_string.unpack1('b*').chars.map { |palette_index| palette[palette_index.to_i] }
+        else
+          # If there are more than 2 colors, each pixel is encoded in 8 bits as a lookup of the palette
+          pixels = pixel_string.unpack('C*').map { |palette_index| palette[palette_index] }
+        end
+
+        framebuffer.update_pixels(
+          rectangle.x_position,
+          rectangle.y_position,
+          rectangle.width,
+          rectangle.height,
+          pixels
+        )
       else
         logger.error("Unhandled filter type #{filter_id}")
       end
 
-      # Apply a single color to a full rectangle
+    # Apply a single color to a full rectangle
     when TightCompressionType::FILL_COMPRESSION
       fill_color = rectangle.body.compression.fill_color
       # convert 8 bit RGB pixels to RGB format
@@ -246,7 +266,7 @@ class RubyVnc::Decoder::Tight
         (fill_color >> 8 & 0xff),
         (fill_color >> 0 & 0xff)
       ]
-      pixels = (rectangle.width * rectangle.height).times.lazy.map { rgb }
+      pixels = (rectangle.width * rectangle.height).times.map { rgb }
 
       framebuffer.update_pixels(
         rectangle.x_position,
