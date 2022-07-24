@@ -13,6 +13,10 @@ Supported encodings:
 - Zlib
 - Tight
 
+## GUI Example
+
+![VNC GUI Example](./docs/recording.gif)
+
 ## Installation
 
 Install the native dependencies:
