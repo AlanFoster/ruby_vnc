@@ -928,6 +928,16 @@ class RubyVnc::Client
     path
   end
 
+  # The remote host address
+  # @!attribute [r] logger
+  #   @return [String]
+  attr_reader :host
+
+  # The remote host port
+  # @!attribute [r] port
+  #   @return [Integer]
+  attr_reader :port
+
   protected
 
   # The non-blocking socket that data will be written to/read from
@@ -939,16 +949,6 @@ class RubyVnc::Client
   # @!attribute [r] logger
   #   @return [Logger]
   attr_reader :logger
-
-  # The remote host address
-  # @!attribute [r] logger
-  #   @return [String]
-  attr_reader :host
-
-  # The remote host port
-  # @!attribute [r] port
-  #   @return [Integer]
-  attr_reader :port
 
   # The security handshake data returned by the remote server
   # @!attribute [rw] handshake

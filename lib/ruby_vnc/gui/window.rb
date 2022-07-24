@@ -27,7 +27,7 @@ class RubyVnc::Gui::Window
     @client = client
     @logger = logger
     default_options = {
-      title: 'VNC Client',
+      title: "VNC Client - vnc://#{client.host}:#{client.port}",
       fps_cap: 24,
       width: client.state.width,
       height: client.state.height,
